@@ -26,10 +26,8 @@ export function TopNav() {
 
   return (
     <header className="w-full text-white absolute top-0 left-0 z-50">
-      {/* === TOP SECTION === */}
       <div className="w-full bg-[#141414]">
         <div className="max-w-7xl mx-auto h-[6rem] flex items-center justify-between relative">
-          {/* LEFT — Logo */}
           <div className="flex items-center">
             <img
               src={greenCubesLogo}
@@ -38,7 +36,6 @@ export function TopNav() {
             />
           </div>
 
-          {/* CENTER — Breadcrumbs */}
           <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-3 whitespace-nowrap text-left">
             <img src={valeLogo} alt="Vale Logo" className="h-9 object-contain" />
             <span className="text-sm text-white/80">
@@ -47,7 +44,6 @@ export function TopNav() {
             </span>
           </div>
 
-          {/* RIGHT — User Info */}
           <div className="flex items-center gap-1 text-slate-300 text-base">
             <span className="pt-1">Vale</span>
             <img
@@ -59,11 +55,8 @@ export function TopNav() {
         </div>
       </div>
 
-      {/* === BOTTOM SECTION === */}
       <div className="max-w-7xl mx-auto flex justify-end pt-3 text-m font-medium tracking-wide bg-transparent relative">
-        {/* WRAPPER for nav + underline */}
         <div className="flex flex-col items-center justify-center">
-          {/* Navigation Links */}
           <nav className="flex items-center justify-center gap-10 mb-0.5">
             <span
               onClick={() => navigate("/upload")}
@@ -98,8 +91,6 @@ export function TopNav() {
               File Manager
             </span>
           </nav>
-
-          {/* Underline (3 equal parts) */}
           <div className="relative w-[355px] h-[3px] bg-slate-700 rounded-full overflow-hidden">
             <div
               className="absolute top-0 left-0 h-full bg-lime-500 transition-all duration-300"

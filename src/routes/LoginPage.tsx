@@ -15,21 +15,16 @@ export function LoginPage() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden text-white flex flex-col">
-      {/* Background image */}
       <img
         src={forestImage}
         alt="forest background"
         className="absolute inset-0 w-full h-full object-cover"
       />
 
-      {/* Overlay */}
       <div className="absolute inset-0 bg-black/60" />
 
-      {/* NAVBAR */}
       <header className="relative z-10 w-full h-[6rem] ">
-        {/* Inner container */}
         <div className=" mx-auto h-full flex items-center justify-between px-12 pt-12">
-          {/* LEFT SIDE */}
           <div className="flex items-center gap-3">
             <img
               src={greenCubesLogo}
@@ -42,7 +37,6 @@ export function LoginPage() {
             </span>
           </div>
 
-          {/* RIGHT SIDE */}
           <div className="flex items-center">
             <img
               src={menuIcon}
@@ -53,7 +47,6 @@ export function LoginPage() {
         </div>
       </header>
 
-      {/* MAIN CONTENT */}
       <div className="relative z-10 flex flex-1 items-center justify-center w-full">
         <div className="bg-neutral-900/90 rounded-xl w-full max-w-4xl h-[60vh] shadow-2xl border border-slate-800 flex items-center justify-center">
           <div className="text-center w-full max-w-md flex flex-col items-center justify-center gap-6">

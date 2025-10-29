@@ -34,7 +34,7 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
       onSubmit={handleSubmit}
       className="w-full max-w-3xl flex flex-col gap-8 px-2"
     >
-      {/* SPECIES */}
+
       <div className="flex flex-col gap-2">
         <label className="text-sm text-slate-300">Species</label>
         <input
@@ -47,7 +47,6 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
         />
       </div>
 
-      {/* ROW 1 — Experience Point + Sensor */}
       <div className="grid grid-cols-2 gap-8">
         <div className="flex flex-col gap-2">
           <label className="text-sm text-slate-300">Experience Point</label>
@@ -78,7 +77,6 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
         </div>
       </div>
 
-      {/* ROW 2 — Deployment ID + Experience ID */}
       <div className="grid grid-cols-2 gap-8">
         <div className="flex flex-col gap-2">
           <label className="text-sm text-slate-300">Deployment ID</label>
@@ -109,7 +107,6 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
         </div>
       </div>
 
-      {/* SUBMIT BUTTON (OPTIONAL, can remove if parent controls save) */}
       <button
         type="submit"
         className="hidden bg-lime-400 text-neutral-900 font-semibold px-6 py-2 rounded-md hover:bg-lime-300 transition"

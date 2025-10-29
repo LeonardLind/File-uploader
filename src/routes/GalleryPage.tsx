@@ -7,11 +7,8 @@ export function GalleryPage() {
 
   return (
     <div className="min-h-screen w-screen bg-neutral-950 text-white flex flex-col overflow-hidden">
-
-      {/* === MAIN CONTENT === */}
       <main className="flex flex-col flex-1 px-10 py-10 items-center overflow-y-auto">
         <div className="w-full max-w-7xl">
-          {/* Subheader */}
           <div className="mb-10 flex items-baseline justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-white">File Manager</h1>
@@ -21,7 +18,6 @@ export function GalleryPage() {
             </div>
           </div>
 
-          {/* Table */}
           {savedImages.length === 0 ? (
             <p className="text-slate-500">No files registered yet.</p>
           ) : (

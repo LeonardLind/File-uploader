@@ -7,18 +7,13 @@ import backgroundImage from "../assets/forst.png";
 export function UploadPage() {
   const navigate = useNavigate();
   const { images } = useImageStore();
-
-  // "unsaved" = just uploaded stuff not registered yet
   const unsaved = images.filter((img) => !img.saved);
 
-  // simple helper: show a filename-ish label
   function getFileNameFromImage(img: { file?: File | undefined; id: string }) {
     if (img.file && img.file.name) return img.file.name;
-    // fallback, just slice the id
     return `capture_${img.id.slice(0, 6)}.jpg`;
   }
 
-  // pretend upload is already 100% for now
   const uploadList = useMemo(() => {
     return unsaved.map((img) => ({
       id: img.id,
@@ -31,14 +26,11 @@ export function UploadPage() {
   const total = uploadList.length;
   const done = uploadList.filter((f) => f.done).length;
 
-  // when user clicks "Continue to Register"
   function handleContinue() {
     if (unsaved.length === 0) return;
-    // go to first unsaved image's staging page
     navigate(`/staging/${unsaved[0].id}`);
   }
 
-  // state flag for layout mode
   const hasUploads = total > 0;
 
   return (
@@ -46,14 +38,12 @@ export function UploadPage() {
       className="relative min-h-screen w-full bg-cover bg-center flex flex-col text-white"
       style={{ backgroundImage: `url(${backgroundImage})` }}
     >
-      {/* dark overlay */}
+
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]" />
 
-      {/* page content */}
       <main className="relative z-10 flex flex-col flex-1 items-center w-full pt-40 pb-16 px-8">
         <div className="w-full max-w-5xl flex flex-col items-center text-center">
 
-          {/* ===== HEADER (hide when uploads exist) ===== */}
           {!hasUploads && (
             <header className="mb-10 transition-opacity duration-300">
               <h1 className="text-3xl font-semibold mb-3">
@@ -65,31 +55,24 @@ export function UploadPage() {
             </header>
           )}
 
-          {/* ===== DROPZONE =====
-               - shrinks and moves up once we have files
-            */}
           <div
             className={`w-full max-w-2xl transition-all duration-300 ${
               hasUploads ? "mb-8" : "mb-12"
             }`}
           >
             <FileDropzone
-              compact={hasUploads} // we'll add this prop so dropzone can change size
+              compact={hasUploads} 
             />
           </div>
 
-          {/* ===== INGEST PANEL (only show when there are uploads) ===== */}
           {hasUploads && (
             <section className="w-full max-w-2xl ">
-
-              {/* file rows */}
               <ul className="space-y-2 max-h-[30vh] overflow-y-auto pr-2 custom-scroll">
                 {uploadList.map((file) => (
                   <li
                     key={file.id}
                     className="bg-neutral-800/90 rounded-lg p-4 flex flex-col gap-1"
                   >
-                    {/* top row: name + status */}
                     <div className="flex items-start justify-between text-sm">
                       <div className="text-white font-medium truncate max-w-[70%]">
                         {file.name}
@@ -113,7 +96,6 @@ export function UploadPage() {
                       </div>
                     </div>
 
-                    {/* progress bar */}
                     <div className="w-full h-2 bg-slate-700/50 rounded-md overflow-hidden">
                       <div
                         className={`h-full ${
@@ -128,7 +110,6 @@ export function UploadPage() {
                 ))}
               </ul>
 
-              {/* footer row: counter + continue button */}
               <div className="flex items-center justify-between mt-6 text-sm">
                 <div className="text-slate-300">
                   <span className="text-white font-semibold">

@@ -35,9 +35,7 @@ export function StagingPage() {
 
   return (
     <div className="relative min-h-screen w-full flex flex-col bg-neutral-900 text-white">
-      {/* MAIN SECTION */}
       <main className="flex flex-1 min-h-0 h-[calc(100vh-5rem)] bg-neutral-950 text-white overflow-hidden pt-[4rem]">
-        {/* LEFT SIDEBAR */}
         <aside className="w-[20rem] bg-neutral-950 border-r border-slate-800 flex flex-col shrink-0 min-h-0">
           <div className="p-5 border-b border-slate-800 shrink-0">
             <h3 className="uppercase text-lg text-white">Media Upload</h3>
@@ -70,12 +68,10 @@ export function StagingPage() {
           </div>
         </aside>
 
-        {/* CENTER COLUMN */}
         <section className="flex-1 flex flex-col min-w-0 min-h-0">
           <div className="flex-1 min-h-0 overflow-y-auto py-10 px-8 custom-scroll">
             {selectedImage ? (
               <>
-                {/* Image Preview */}
                 <div className="bg-black rounded-md p-4 mb-10 shadow-md max-w-3xl w-full flex justify-center items-center mx-auto">
                   <img
                     src={selectedImage.previewUrl}
@@ -84,7 +80,6 @@ export function StagingPage() {
                   />
                 </div>
 
-                {/* Metadata Form */}
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -158,7 +153,6 @@ export function StagingPage() {
                   </div>
                 </form>
 
-                {/* Buttons */}
                 <div className="flex justify-center gap-6 mt-10 max-w-3xl mx-auto">
                   <button className="border border-slate-500 text-slate-200 px-6 py-2 rounded-md hover:bg-slate-800 transition">
                     Reject
@@ -187,7 +181,6 @@ export function StagingPage() {
           </div>
         </section>
 
-        {/* RIGHT SIDEBAR */}
         <aside className="w-[20rem] bg-neutral-950 border-l border-slate-800 flex flex-col shrink-0 min-h-0">
           <div className="p-5 border-b border-slate-800 shrink-0">
             <h3 className="uppercase text-lg text-white">Registered</h3>
