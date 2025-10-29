@@ -15,10 +15,10 @@ export function ImageStoreProvider({ children }: { children: ReactNode }) {
   function addFiles(files: File[]) {
     const next = files.map((file) => {
       const id = crypto.randomUUID();
+      const previewUrl = URL.createObjectURL(file);
       return {
         id,
-        file,
-        previewUrl: URL.createObjectURL(file),
+        previewUrl,
         saved: false,
       } satisfies PendingImage;
     });
