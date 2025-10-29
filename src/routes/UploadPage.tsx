@@ -122,7 +122,7 @@ export function UploadPage() {
                   onClick={handleContinue}
                   className="bg-lime-400 text-neutral-900 font-semibold rounded-md px-2 py-2 hover:bg-lime-300 transition"
                 >
-                  Continue to register →
+                  Continue to register 
                 </button>
               </div>
             </section>
