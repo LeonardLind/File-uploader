@@ -1,10 +1,19 @@
 import express from "express";
-import multer from "multer";
-import { uploadFile } from "../controllers/uploadController.mjs";
+import {
+  generatePresignedUrl,
+  saveMetadata,
+  getAllMetadata,
+  getMetadata,
+} from "../controllers/uploadController.mjs";
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() }); // keep file in memory for S3 upload
 
-router.post("/", upload.single("file"), uploadFile);
+// Generate pre-signed S3 URL for direct uploads
+router.post("/presign", generatePresignedUrl);
+
+// Metadata endpoints
+router.post("/metadata", saveMetadata);
+router.get("/metadata", getAllMetadata);
+router.get("/metadata/:fileId", getMetadata);
 
 export default router;

@@ -1,9 +1,42 @@
-import { useImageStore } from "../state/useImageStore";
+import { useEffect, useState } from "react";
+
+type MetadataItem = {
+  fileId: string;
+  filename: string;
+  species?: string;
+  experiencePoint?: string;
+  sensorId?: string;
+  deploymentId?: string;
+  experienceId?: string;
+  updatedAt?: string;
+};
 
 export function GalleryPage() {
-  const { images } = useImageStore();
+  const [files, setFiles] = useState<MetadataItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const savedImages = images.filter((img) => img.saved);
+  const API_URL = import.meta.env.VITE_API_URL;
+  const BUCKET_NAME = import.meta.env.VITE_AWS_BUCKET;
+
+  useEffect(() => {
+    async function fetchMetadata() {
+      try {
+        const res = await fetch(`${API_URL}/api/upload/metadata`);
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.error || "Failed to fetch metadata");
+        setFiles(data.items || []);
+      } catch (err: any) {
+        console.error("❌ Error loading metadata:", err);
+        setError(err.message || "Failed to load data");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchMetadata();
+  }, [API_URL]);
 
   return (
     <div className="min-h-screen w-screen bg-neutral-950 text-white flex flex-col overflow-hidden">
@@ -13,69 +46,71 @@ export function GalleryPage() {
             <div>
               <h1 className="text-2xl font-semibold text-white">File Manager</h1>
               <p className="text-slate-400 text-sm">
-                {savedImages.length} files registered
+                {loading
+                  ? "Loading..."
+                  : `${files.length} file${files.length === 1 ? "" : "s"} registered`}
               </p>
             </div>
           </div>
 
-          {savedImages.length === 0 ? (
-            <p className="text-slate-500">No files registered yet.</p>
+          {error && <p className="text-red-400 mb-6 text-center">Error: {error}</p>}
+
+          {loading ? (
+            <p className="text-slate-400 text-center">Fetching data...</p>
+          ) : files.length === 0 ? (
+            <p className="text-slate-500 text-center">No files registered yet.</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-800 bg-neutral-900 shadow-md">
               <table className="min-w-full text-sm text-slate-300 border-collapse">
                 <thead className="bg-neutral-800 text-slate-100 text-left uppercase text-xs tracking-wider">
                   <tr>
-                    <th className="px-4 py-3">
-                      <input type="checkbox" className="accent-lime-400" />
-                    </th>
                     <th className="px-4 py-3">Species</th>
                     <th className="px-4 py-3">Experience Point</th>
-                    <th className="px-4 py-3">Sensor ID</th>
-                    <th className="px-4 py-3">Deployment ID</th>
-                    <th className="px-4 py-3">Experience ID</th>
-                    <th className="px-4 py-3">Thumbnail</th>
-                    <th className="px-4 py-3">Media ID</th>
-                    <th className="px-4 py-3">Captured</th>
-                    <th className="px-4 py-3">Uploaded</th>
+                    <th className="px-4 py-3">Sensor</th>
+                    <th className="px-4 py-3">Deployment</th>
+                    <th className="px-4 py-3">Experience</th>
+                    <th className="px-4 py-3">Preview</th>
+                    <th className="px-4 py-3">File</th>
+                    <th className="px-4 py-3">Updated</th>
                   </tr>
                 </thead>
-
                 <tbody>
-                  {savedImages.map((img) => (
-                    <tr
-                      key={img.id}
-                      className="border-t border-slate-800 hover:bg-neutral-800/50 transition-colors"
-                    >
-                      <td className="px-4 py-3">
-                        <input type="checkbox" className="accent-lime-400" />
-                      </td>
+                  {files.map((file) => {
+                    const s3Url = `https://${BUCKET_NAME}.s3.amazonaws.com/${file.fileId}`;
+                    const isVideo = file.filename?.match(/\.(mp4|avi|mov|mkv)$/i);
 
-                      <td className="px-4 py-3 font-medium text-white">
-                        {img.species || "—"}
-                      </td>
-
-                      <td className="px-4 py-3">{img.experiencePoint || "—"}</td>
-                      <td className="px-4 py-3">{img.sensorId || "—"}</td>
-                      <td className="px-4 py-3">{img.deploymentId || "—"}</td>
-                      <td className="px-4 py-3">{img.experienceId || "—"}</td>
-
-                      <td className="px-4 py-3">
-                        {img.previewUrl ? (
-                          <img
-                            src={img.previewUrl}
-                            alt="thumb"
-                            className="w-16 h-10 object-cover rounded-md border border-slate-700"
-                          />
-                        ) : (
-                          <span className="text-slate-600">–</span>
-                        )}
-                      </td>
-
-                      <td className="px-4 py-3 text-slate-400">b476188833003</td>
-                      <td className="px-4 py-3 text-slate-400">21042025</td>
-                      <td className="px-4 py-3 text-slate-400">01052025</td>
-                    </tr>
-                  ))}
+                    return (
+                      <tr
+                        key={file.fileId}
+                        className="border-t border-slate-800 hover:bg-neutral-800/50 transition-colors"
+                      >
+                        <td className="px-4 py-3 font-medium text-white">{file.species || "—"}</td>
+                        <td className="px-4 py-3">{file.experiencePoint || "—"}</td>
+                        <td className="px-4 py-3">{file.sensorId || "—"}</td>
+                        <td className="px-4 py-3">{file.deploymentId || "—"}</td>
+                        <td className="px-4 py-3">{file.experienceId || "—"}</td>
+                        <td className="px-4 py-3">
+                          {isVideo ? (
+                            <video
+                              src={s3Url}
+                              className="w-20 h-12 object-cover rounded-md border border-slate-700"
+                              controls
+                            />
+                          ) : (
+                            <img
+                              src={s3Url}
+                              alt="thumbnail"
+                              className="w-16 h-10 object-cover rounded-md border border-slate-700"
+                            />
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-slate-400">{file.filename || "—"}</td>
+                        <td className="px-4 py-3 text-slate-400">
+                          {file.updatedAt ? new Date(file.updatedAt).toLocaleString() : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

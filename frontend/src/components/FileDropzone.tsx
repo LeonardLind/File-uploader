@@ -12,50 +12,63 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isDone, setIsDone] = useState(false);
 
+  const API_URL = import.meta.env.VITE_API_URL;
+
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
-      if (acceptedFiles.length === 0) return;
-
       setIsUploading(true);
       setIsDone(false);
-      setUploadProgress(0);
 
-      for (let i = 0; i < acceptedFiles.length; i++) {
-        const file = acceptedFiles[i];
-        const formData = new FormData();
-        formData.append("file", file);
-
+      for (const file of acceptedFiles) {
         try {
-          const res = await fetch("http://localhost:3000/upload", {
+          // 1️⃣ Request pre-signed URL from backend
+          const res = await fetch(`${API_URL}/api/upload/presign`, {
             method: "POST",
-            body: formData,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: file.name,
+              contentType: file.type,
+            }),
           });
 
-          if (!res.ok) throw new Error("Upload failed");
+          if (!res.ok) throw new Error("Failed to get presigned URL");
+          const { uploadUrl, key } = await res.json();
 
-          // simulate upload progress for smooth animation
-          setUploadProgress(Math.round(((i + 1) / acceptedFiles.length) * 100));
+          // 2️⃣ Upload file directly to S3
+          await fetch(uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": file.type },
+            body: file,
+          });
 
-          // add to local state
+          console.log("✅ Uploaded to S3:", key);
+
+          // Optional: update local store for UI preview
           addFiles([file]);
+
+          // Simulate progress (optional)
+          for (let p = 0; p <= 100; p += 20) {
+            setUploadProgress(p);
+            await new Promise((r) => setTimeout(r, 50));
+          }
         } catch (err) {
-          console.error("Upload error:", err);
+          console.error("❌ Upload failed:", err);
         }
       }
 
-      // mark as done after a small delay
-      setTimeout(() => {
-        setIsUploading(false);
-        setIsDone(true);
-      }, 500);
+      setIsUploading(false);
+      setIsDone(true);
     },
-    [addFiles]
+    [API_URL, addFiles]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: true,
-    accept: { "image/*": [] },
+    accept: {
+      "video/*": [],
+      "image/*": [],
+    },
   });
 
   const showProgress = isUploading || isDone;

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 type Props = {
+  fileId: string; // 🔹 new prop
   defaultValues: {
     species: string;
     experiencePoint: string;
@@ -8,33 +9,51 @@ type Props = {
     deploymentId: string;
     experienceId: string;
   };
-  onSave: (data: {
-    species: string;
-    experiencePoint: string;
-    sensorId: string;
-    deploymentId: string;
-    experienceId: string;
-  }) => void;
+  onSave?: (data: any) => void;
 };
 
-export function MetadataForm({ defaultValues, onSave }: Props) {
+export function MetadataForm({ fileId, defaultValues, onSave }: Props) {
   const [values, setValues] = useState(defaultValues);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setValues({ ...values, [e.target.name]: e.target.value });
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    onSave(values);
+    setSaving(true);
+    setSuccess(false);
+
+    try {
+      const res = await fetch("http://localhost:3000/api/metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId,
+          filename: fileId.split("/").pop(),
+          ...values,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setSuccess(true);
+        onSave?.(data.item);
+      } else {
+        console.error("Failed to save:", data.error);
+      }
+    } catch (err) {
+      console.error("❌ Error saving metadata:", err);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="w-full max-w-3xl flex flex-col gap-8 px-2"
-    >
-
+    <form onSubmit={handleSubmit} className="w-full max-w-3xl flex flex-col gap-8 px-2">
       <div className="flex flex-col gap-2">
         <label className="text-sm text-slate-300">Species</label>
         <input
@@ -43,10 +62,11 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
           placeholder="Start typing common or latin name"
           value={values.species}
           onChange={handleChange}
-          className="w-full h-[3rem] rounded-md bg-transparent border border-slate-600 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
+          className="w-full h-12nded-md bg-transparent border border-slate-600 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
         />
       </div>
 
+      {/* ROW 1 */}
       <div className="grid grid-cols-2 gap-8">
         <div className="flex flex-col gap-2">
           <label className="text-sm text-slate-300">Experience Point</label>
@@ -54,7 +74,7 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
             name="experiencePoint"
             value={values.experiencePoint}
             onChange={handleChange}
-            className="w-full h-[3rem] rounded-md bg-transparent border border-slate-600 px-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 appearance-none transition"
+            className="w-full h-12 rounded-md bg-transparent border border-slate-600 px-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
           >
             <option value="">Select</option>
             <option value="XP1">XP1</option>
@@ -68,7 +88,7 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
             name="sensorId"
             value={values.sensorId}
             onChange={handleChange}
-            className="w-full h-[3rem] rounded-md bg-transparent border border-slate-600 px-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 appearance-none transition"
+            className="w-full h-12nded-md bg-transparent border border-slate-600 px-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
           >
             <option value="">Select</option>
             <option value="Cam08">Cam08</option>
@@ -77,6 +97,7 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
         </div>
       </div>
 
+      {/* ROW 2 */}
       <div className="grid grid-cols-2 gap-8">
         <div className="flex flex-col gap-2">
           <label className="text-sm text-slate-300">Deployment ID</label>
@@ -84,7 +105,7 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
             name="deploymentId"
             value={values.deploymentId}
             onChange={handleChange}
-            className="w-full h-[3rem] rounded-md bg-transparent border border-slate-600 px-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 appearance-none transition"
+            className="w-full h-12 rounded-md bg-transparent border border-slate-600 px-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
           >
             <option value="">Select</option>
             <option value="Footpath">Foot path</option>
@@ -98,7 +119,7 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
             name="experienceId"
             value={values.experienceId}
             onChange={handleChange}
-            className="w-full h-[3rem] rounded-md bg-transparent border border-slate-600 px-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 appearance-none transition"
+            className="w-full h-12 rounded-md bg-transparent border border-slate-600 px-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
           >
             <option value="">Select</option>
             <option value="Breno">Breno</option>
@@ -109,9 +130,12 @@ export function MetadataForm({ defaultValues, onSave }: Props) {
 
       <button
         type="submit"
-        className="hidden bg-lime-400 text-neutral-900 font-semibold px-6 py-2 rounded-md hover:bg-lime-300 transition"
+        disabled={saving}
+        className={`bg-lime-400 text-neutral-900 font-semibold px-6 py-2 rounded-md transition ${
+          saving ? "opacity-50 cursor-not-allowed" : "hover:bg-lime-300"
+        }`}
       >
-        Save
+        {saving ? "Saving..." : success ? "Saved ✅" : "Save Metadata"}
       </button>
     </form>
   );

@@ -6,11 +6,24 @@ import menuIcon from "../assets/hamburger.png";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+
+  const VALID_USER = import.meta.env.VITE_LOGIN_USER;
+  const VALID_PASS = import.meta.env.VITE_LOGIN_PASS;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    navigate("/upload");
+
+    if (email === VALID_USER && password === VALID_PASS) {
+      localStorage.setItem("auth", "true");
+      setError("");
+      navigate("/upload");
+    } else {
+      setError("Invalid credentials. Please try again.");
+    }
   }
 
   return (
@@ -23,8 +36,8 @@ export function LoginPage() {
 
       <div className="absolute inset-0 bg-black/60" />
 
-      <header className="relative z-10 w-full h-[6rem] ">
-        <div className=" mx-auto h-full flex items-center justify-between px-12 pt-12">
+      <header className="relative z-10 w-full h-24">
+        <div className="mx-auto h-full flex items-center justify-between px-12 pt-12">
           <div className="flex items-center gap-3">
             <img
               src={greenCubesLogo}
@@ -71,8 +84,10 @@ export function LoginPage() {
 
               <input
                 type="text"
-                placeholder="First name"
-                className="w-full h-[3.5rem] rounded-md bg-transparent border border-white px-6 text-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full h-14 rounded-md bg-transparent border border-white px-6 text-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500"
                 required
               />
 
@@ -80,7 +95,9 @@ export function LoginPage() {
                 <input
                   type={showPassword ? "text" : "password"}
                   placeholder="********"
-                  className="w-full h-[3.5rem] rounded-md bg-transparent border border-white px-6 text-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full h-14 rounded-md bg-transparent border border-white px-6 text-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500"
                   required
                 />
                 <button
@@ -92,9 +109,13 @@ export function LoginPage() {
                 </button>
               </div>
 
+              {error && (
+                <p className="text-red-400 text-sm font-medium mt-1">{error}</p>
+              )}
+
               <button
                 type="submit"
-                className="w-full h-[3.5rem] bg-lime-500 text-neutral-900 font-semibold rounded-md hover:bg-lime-400 transition-colors"
+                className="w-full h-14 bg-lime-500 text-neutral-900 font-semibold rounded-md hover:bg-lime-400 transition-colors"
               >
                 Login
               </button>

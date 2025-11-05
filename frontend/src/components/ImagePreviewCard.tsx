@@ -16,7 +16,7 @@ export function ImagePreviewCard({ image }: { image: PendingImage & { animalLabe
       </div>
 
       {image.animalLabel && (
-        <p className="text-slate-300 text-sm font-medium text-center truncate max-w-[10rem]">
+        <p className="text-slate-300 text-sm font-medium text-center truncate max-w-40">
           {image.animalLabel}
         </p>
       )}
