@@ -15,7 +15,7 @@ app.use(express.json());
 app.use("/api/upload", uploadRoutes);
 
 app.get("/", (_req, res) => {
-  res.send("✅ API is alive!");
+  res.send("API is alive!");
 });
 
 app.listen(PORT, () => {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 type Props = {
-  fileId: string; // 🔹 new prop
+  file: File;
   defaultValues: {
     species: string;
     experiencePoint: string;
@@ -12,10 +12,12 @@ type Props = {
   onSave?: (data: any) => void;
 };
 
-export function MetadataForm({ fileId, defaultValues, onSave }: Props) {
+export function MetadataForm({ file, defaultValues, onSave }: Props) {
   const [values, setValues] = useState(defaultValues);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  const API_URL = import.meta.env.VITE_API_URL;
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     setValues({ ...values, [e.target.name]: e.target.value });
@@ -23,30 +25,59 @@ export function MetadataForm({ fileId, defaultValues, onSave }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!file) {
+      alert("⚠️ No file found for upload.");
+      return;
+    }
+
     setSaving(true);
     setSuccess(false);
 
     try {
-      const res = await fetch("http://localhost:3000/api/metadata", {
+      console.log("📡 Requesting presigned URL...");
+      const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fileId,
-          filename: fileId.split("/").pop(),
+          filename: file.name,
+          contentType: file.type || "application/octet-stream",
+        }),
+      });
+
+      if (!presignRes.ok) throw new Error(`Presign failed: ${presignRes.status}`);
+      const { uploadUrl, key } = await presignRes.json();
+
+      console.log("⬆️ Uploading to S3...");
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+
+      if (!uploadRes.ok) throw new Error(`S3 upload failed: ${uploadRes.status}`);
+
+      console.log("🎉 Upload complete:", key);
+
+      console.log("🗃️ Saving metadata...");
+      const metaRes = await fetch(`${API_URL}/api/upload/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId: key,
+          filename: file.name,
           ...values,
         }),
       });
 
-      const data = await res.json();
+      const metaData = await metaRes.json();
+      if (!metaData.success) throw new Error(metaData.error || "Failed to save metadata");
 
-      if (data.success) {
-        setSuccess(true);
-        onSave?.(data.item);
-      } else {
-        console.error("Failed to save:", data.error);
-      }
-    } catch (err) {
-      console.error("❌ Error saving metadata:", err);
+      console.log("✅ Metadata saved!");
+      setSuccess(true);
+      onSave?.(metaData.item);
+    } catch (err: any) {
+      console.error("❌ Upload failed:", err);
+      alert(`Upload failed: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -54,19 +85,20 @@ export function MetadataForm({ fileId, defaultValues, onSave }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-3xl flex flex-col gap-8 px-2">
+      {/* 🦋 Species */}
       <div className="flex flex-col gap-2">
         <label className="text-sm text-slate-300">Species</label>
         <input
           name="species"
           type="text"
-          placeholder="Start typing common or latin name"
+          placeholder="Enter species (common or latin)"
           value={values.species}
           onChange={handleChange}
-          className="w-full h-12nded-md bg-transparent border border-slate-600 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
+          className="w-full h-12 rounded-md bg-transparent border border-slate-600 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
         />
       </div>
 
-      {/* ROW 1 */}
+      {/* 🧭 Row 1 */}
       <div className="grid grid-cols-2 gap-8">
         <div className="flex flex-col gap-2">
           <label className="text-sm text-slate-300">Experience Point</label>
@@ -88,7 +120,7 @@ export function MetadataForm({ fileId, defaultValues, onSave }: Props) {
             name="sensorId"
             value={values.sensorId}
             onChange={handleChange}
-            className="w-full h-12nded-md bg-transparent border border-slate-600 px-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
+            className="w-full h-12 rounded-md bg-transparent border border-slate-600 px-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
           >
             <option value="">Select</option>
             <option value="Cam08">Cam08</option>
@@ -97,7 +129,7 @@ export function MetadataForm({ fileId, defaultValues, onSave }: Props) {
         </div>
       </div>
 
-      {/* ROW 2 */}
+      {/* 🌲 Row 2 */}
       <div className="grid grid-cols-2 gap-8">
         <div className="flex flex-col gap-2">
           <label className="text-sm text-slate-300">Deployment ID</label>
@@ -128,6 +160,7 @@ export function MetadataForm({ fileId, defaultValues, onSave }: Props) {
         </div>
       </div>
 
+      {/* 💾 Submit */}
       <button
         type="submit"
         disabled={saving}
@@ -135,7 +168,7 @@ export function MetadataForm({ fileId, defaultValues, onSave }: Props) {
           saving ? "opacity-50 cursor-not-allowed" : "hover:bg-lime-300"
         }`}
       >
-        {saving ? "Saving..." : success ? "Saved ✅" : "Save Metadata"}
+        {saving ? "Uploading..." : success ? "Uploaded ✅" : "Save & Upload"}
       </button>
     </form>
   );

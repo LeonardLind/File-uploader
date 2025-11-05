@@ -1,5 +1,16 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { type PendingImage } from "../types";
+
+export type PendingImage = {
+  id: string;
+  file: File;            // 🆕 actual file
+  previewUrl: string;    // local preview blob URL
+  saved: boolean;        // whether uploaded/registered
+  species?: string;
+  experiencePoint?: string;
+  sensorId?: string;
+  deploymentId?: string;
+  experienceId?: string;
+};
 
 type ImageStoreContextType = {
   images: PendingImage[];
@@ -12,12 +23,14 @@ const ImageStoreContext = createContext<ImageStoreContextType | null>(null);
 export function ImageStoreProvider({ children }: { children: ReactNode }) {
   const [images, setImages] = useState<PendingImage[]>([]);
 
+  /** Add new local files to staging (not uploaded yet) */
   function addFiles(files: File[]) {
     const next = files.map((file) => {
       const id = crypto.randomUUID();
       const previewUrl = URL.createObjectURL(file);
       return {
         id,
+        file,        // 🆕 keep original file
         previewUrl,
         saved: false,
       } satisfies PendingImage;
@@ -26,6 +39,7 @@ export function ImageStoreProvider({ children }: { children: ReactNode }) {
     setImages((prev) => [...prev, ...next]);
   }
 
+  /** Update a staged image by ID (used after upload or metadata save) */
   function updateImage(id: string, data: Partial<PendingImage>) {
     setImages((prev) =>
       prev.map((img) => (img.id === id ? { ...img, ...data } : img))

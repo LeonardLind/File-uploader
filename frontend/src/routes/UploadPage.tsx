@@ -13,31 +13,37 @@ export function UploadPage() {
 
   const unsaved = images.filter((img) => !img.saved);
 
-  // Helper to create fallback file name
+  // ✅ Helper: fallback file name
   function getFileNameFromImage(img: { file?: File | undefined; id: string }) {
     if (img.file && img.file.name) return img.file.name;
     return `capture_${img.id.slice(0, 6)}.jpg`;
   }
 
-  // Sync new uploads from global store
+  // ✅ Only update uploadedFiles when there’s an actual change
   useEffect(() => {
-    if (unsaved.length > 0) {
+    if (unsaved.length === 0) return;
+
+    setUploadedFiles((prev) => {
       const newUploads = unsaved.map((img) => ({
         id: img.id,
         name: getFileNameFromImage(img),
         progress: 100,
         done: true,
       }));
-      setUploadedFiles(newUploads);
-    }
+
+      // Compare with previous state — if identical, skip update
+      const isSame =
+        prev.length === newUploads.length &&
+        prev.every((p, i) => p.id === newUploads[i].id);
+
+      return isSame ? prev : newUploads;
+    });
   }, [unsaved]);
 
   const total = uploadedFiles.length;
   const done = uploadedFiles.filter((f) => f.done).length;
-
   const hasUploads = total > 0;
 
-  // Go to staging
   function handleContinue() {
     if (unsaved.length === 0) return;
     navigate(`/staging/${unsaved[0].id}`);
@@ -54,7 +60,7 @@ export function UploadPage() {
       {/* Main content */}
       <main className="relative z-10 flex flex-col flex-1 items-center w-full pt-40 pb-16 px-8">
         <div className="w-full max-w-5xl flex flex-col items-center text-center">
-          {/* Header (hidden after upload) */}
+          {/* Header */}
           {!hasUploads && (
             <header className="mb-10 transition-opacity duration-300">
               <h1 className="text-3xl font-semibold mb-3">
@@ -117,7 +123,7 @@ export function UploadPage() {
                 ))}
               </ul>
 
-              {/* Footer (status + button) */}
+              {/* Footer */}
               <div className="flex items-center justify-between mt-6 text-sm">
                 <div className="text-slate-300">
                   <span className="text-white font-semibold">

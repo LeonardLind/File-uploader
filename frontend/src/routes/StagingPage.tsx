@@ -1,5 +1,5 @@
 import "../index.css";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useImageStore } from "../state/useImageStore";
 import { MetadataForm } from "../components/MetadataForm";
@@ -8,44 +8,32 @@ export function StagingPage() {
   const navigate = useNavigate();
   const { images, updateImage } = useImageStore();
 
-  const [selectedId, setSelectedId] = useState<string | null>(
-    images.find((img) => !img.saved)?.id ?? null
-  );
-
-  const selectedImage = images.find((img) => img.id === selectedId);
   const uploaded = images.filter((img) => !img.saved);
   const registered = images.filter((img) => img.saved);
 
-  const API_URL = import.meta.env.VITE_API_URL;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // ✅ Automatically select the first unsaved file when page loads or list updates
+  useEffect(() => {
+    if (uploaded.length > 0 && !selectedId) {
+      setSelectedId(uploaded[0].id);
+    }
+  }, [uploaded, selectedId]);
+
+  const selectedImage = images.find((img) => img.id === selectedId);
+
+  /** ✅ Called after metadata + upload succeed */
   async function handleSave(savedData: any) {
     if (!selectedImage) return;
 
-    try {
-      // ✅ File name fallback since PendingImage doesn't have `file`
-      const filename = (selectedImage as any).file?.name || `${selectedImage.id}.mp4`;
+    console.log("✅ File successfully uploaded and metadata saved:", savedData);
 
-      const res = await fetch(`${API_URL}/api/upload/metadata`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: selectedImage.id,
-          filename,
-          ...savedData,
-        }),
-      });
+    // Mark image as saved in global store
+    updateImage(selectedImage.id, { ...savedData, saved: true });
 
-      if (!res.ok) throw new Error("Failed to save metadata");
-      console.log("✅ Metadata saved to DynamoDB");
-
-      updateImage(selectedImage.id, { ...savedData, saved: true });
-
-      const remaining = uploaded.filter((img) => img.id !== selectedImage.id);
-      setSelectedId(remaining.length > 0 ? remaining[0].id : null);
-    } catch (err) {
-      console.error("❌ Error saving metadata:", err);
-      alert("Failed to save metadata. Check console for details.");
-    }
+    // Automatically move to next unsaved
+    const remaining = uploaded.filter((img) => img.id !== selectedImage.id);
+    setSelectedId(remaining.length > 0 ? remaining[0].id : null);
   }
 
   function handleDone() {
@@ -55,10 +43,10 @@ export function StagingPage() {
   return (
     <div className="relative min-h-screen w-full flex flex-col bg-neutral-900 text-white">
       <main className="flex flex-1 h-[calc(100vh-5rem)] bg-neutral-950 overflow-hidden pt-16">
-        {/* LEFT — Uploaded files */}
+        {/* LEFT — Pending Review */}
         <aside className="w-[20rem] bg-neutral-950 border-r border-slate-800 flex flex-col">
           <div className="p-5 border-b border-slate-800">
-            <h3 className="uppercase text-lg text-white">Media Upload</h3>
+            <h3 className="uppercase text-lg text-white">Pending Review</h3>
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-4 custom-scroll">
@@ -77,9 +65,9 @@ export function StagingPage() {
                       : "border-transparent hover:scale-[1.02] hover:border-slate-600"
                   }`}
                 >
-                  <img
+                  <video
                     src={img.previewUrl}
-                    alt="thumbnail"
+                    controls={false}
                     className="w-full h-full object-cover rounded-md"
                   />
                 </button>
@@ -93,25 +81,31 @@ export function StagingPage() {
           {selectedImage ? (
             <>
               <div className="bg-black rounded-md p-4 mb-10 shadow-md max-w-3xl w-full flex justify-center">
-                <img
+                <video
                   src={selectedImage.previewUrl}
-                  alt="Preview"
+                  controls
                   className="rounded-md max-h-[400px] object-contain"
                 />
               </div>
 
-              {/* ✅ Pass fileId explicitly (fixes TS2741) */}
-              <MetadataForm
-                fileId={selectedImage.id}
-                defaultValues={{
-                  species: "",
-                  experiencePoint: "",
-                  sensorId: "",
-                  deploymentId: "",
-                  experienceId: "",
-                }}
-                onSave={handleSave}
-              />
+              {/* ✅ Only show form if file exists */}
+              {selectedImage.file ? (
+                <MetadataForm
+                  file={selectedImage.file}
+                  defaultValues={{
+                    species: "",
+                    experiencePoint: "",
+                    sensorId: "",
+                    deploymentId: "",
+                    experienceId: "",
+                  }}
+                  onSave={handleSave}
+                />
+              ) : (
+                <p className="text-slate-400 text-center">
+                  ⚠️ No file attached to this entry.
+                </p>
+              )}
             </>
           ) : (
             <p className="text-slate-400 mt-20 text-center">
@@ -120,7 +114,7 @@ export function StagingPage() {
           )}
         </section>
 
-        {/* RIGHT — Registered list */}
+        {/* RIGHT — Registered Files */}
         <aside className="w-[20rem] bg-neutral-950 border-l border-slate-800 flex flex-col">
           <div className="p-5 border-b border-slate-800">
             <h3 className="uppercase text-lg text-white">Registered</h3>
@@ -131,17 +125,18 @@ export function StagingPage() {
               {registered.length === 0 && (
                 <p className="text-slate-500 text-xs text-center">None yet</p>
               )}
+
               {registered.map((img) => (
-                <button
+                <div
                   key={img.id}
                   className="relative overflow-hidden rounded-md border border-transparent hover:border-slate-600 w-[18rem] h-40 transition-transform"
                 >
-                  <img
+                  <video
                     src={img.previewUrl}
-                    alt="Registered thumbnail"
                     className="w-full h-full object-cover rounded-md"
+                    controls={false}
                   />
-                </button>
+                </div>
               ))}
             </div>
           </div>
