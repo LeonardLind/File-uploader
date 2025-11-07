@@ -16,7 +16,6 @@ export async function generatePresignedUrl(req: Request, res: Response) {
         .json({ success: false, error: "Missing filename or contentType" });
     }
 
-    // Generate unique key for S3
     const key = `uploads/${Date.now()}_${filename}`;
 
     const params = {
@@ -26,15 +25,15 @@ export async function generatePresignedUrl(req: Request, res: Response) {
       Expires: 300, // 5 minutes
     };
 
-    // Generate presigned URL using AWS SDK v2/v3 hybrid
     const uploadUrl = await s3.getSignedUrlPromise("putObject", params);
 
     res.json({ success: true, uploadUrl, key });
   } catch (err: any) {
     console.error("❌ Error generating presigned URL:", err);
-    res
-      .status(500)
-      .json({ success: false, error: err.message || "Failed to generate presigned URL" });
+    res.status(500).json({
+      success: false,
+      error: err.message || "Failed to generate presigned URL",
+    });
   }
 }
 
@@ -47,9 +46,10 @@ export async function saveMetadata(req: Request, res: Response) {
       fileId,
       filename,
       species,
+      plot, // 🆕 from new UI
       sensorId,
       deploymentId,
-      experienceId,
+      experienceId, // still supported if sent
       experiencePoint,
     } = req.body;
 
@@ -59,16 +59,29 @@ export async function saveMetadata(req: Request, res: Response) {
         .json({ success: false, error: "fileId is required" });
     }
 
-    const item = {
-      fileId, // same as your S3 key
+    // Build item but strip out undefined / empty values to keep DynamoDB happy
+    const base = {
+      fileId,
       filename,
       species,
+      plot,
       sensorId,
       deploymentId,
       experienceId,
       experiencePoint,
       updatedAt: new Date().toISOString(),
     };
+
+    const item: Record<string, any> = {};
+    for (const [key, value] of Object.entries(base)) {
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== "" // don't store empty strings unless you want them
+      ) {
+        item[key] = value;
+      }
+    }
 
     await ddb.send(
       new PutCommand({
@@ -92,7 +105,9 @@ export async function saveMetadata(req: Request, res: Response) {
  */
 export async function getAllMetadata(_req: Request, res: Response) {
   try {
-    const data = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
+    const data = await ddb.send(
+      new ScanCommand({ TableName: TABLE_NAME })
+    );
     res.json({ success: true, items: data.Items || [] });
   } catch (err: any) {
     console.error("❌ Error fetching metadata:", err);
@@ -109,10 +124,11 @@ export async function getAllMetadata(_req: Request, res: Response) {
 export async function getMetadata(req: Request, res: Response) {
   try {
     const { fileId } = req.params;
-    if (!fileId)
+    if (!fileId) {
       return res
         .status(400)
         .json({ success: false, error: "Missing fileId" });
+    }
 
     const data = await ddb.send(
       new GetCommand({
@@ -121,8 +137,12 @@ export async function getMetadata(req: Request, res: Response) {
       })
     );
 
-    if (!data.Item)
-      return res.status(404).json({ success: false, error: "Not found" });
+    if (!data.Item) {
+      return res
+        .status(404)
+        .json({ success: false, error: "Not found" });
+    }
+
     res.json({ success: true, item: data.Item });
   } catch (err: any) {
     console.error("❌ Error getting metadata:", err);

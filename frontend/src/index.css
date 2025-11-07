@@ -8,12 +8,20 @@
 .custom-scroll::-webkit-scrollbar {
   width: 8px;
 }
+
 .custom-scroll::-webkit-scrollbar-thumb {
   background-color: rgba(255, 255, 255, 0.25);
   border-radius: 4px;
 }
+
 .custom-scroll::-webkit-scrollbar-thumb:hover {
   background-color: rgba(255, 255, 255, 0.4);
 }
+
+/* optional: smooth scroll behavior */
+.custom-scroll {
+  scroll-behavior: smooth;
+}
+
 
 

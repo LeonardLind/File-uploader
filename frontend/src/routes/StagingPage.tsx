@@ -41,40 +41,53 @@ export function StagingPage() {
   }
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col bg-neutral-900 text-white">
-      <main className="flex flex-1 h-[calc(100vh-5rem)] bg-neutral-950 overflow-hidden pt-16">
-        {/* LEFT — Pending Review */}
-        <aside className="w-[20rem] bg-neutral-950 border-r border-slate-800 flex flex-col">
-          <div className="p-5 border-b border-slate-800">
-            <h3 className="uppercase text-lg text-white">Pending Review</h3>
-          </div>
+    <div className="flex flex-col w-full h-full bg-neutral-900 text-white">
+      {/* Lock layout height; prevent body scroll */}
+      <main className="flex flex-1 h-full bg-neutral-950">
+{/* LEFT — Pending Review */}
+<aside className="flex flex-col w-[20rem] h-full bg-neutral-950 border-r border-slate-800 overflow-hidden">
+  {/* Header */}
+  <div className="p-5 border-b border-slate-800 shrink-0">
+    <h3 className="uppercase text-lg text-white">Pending Review</h3>
+  </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4 custom-scroll">
-            <div className="flex flex-col items-center gap-3">
-              {uploaded.length === 0 && (
-                <p className="text-slate-500 text-xs text-center">No files</p>
-              )}
+  {/* Scrollable content */}
+  <div className="flex-1 overflow-y-auto px-4 py-4 custom-scroll">
+    <div className="flex flex-col items-center gap-3">
+      {uploaded.length === 0 && (
+        <p className="text-slate-500 text-xs text-center">No files</p>
+      )}
 
-              {uploaded.map((img) => (
-                <button
-                  key={img.id}
-                  onClick={() => setSelectedId(img.id)}
-                  className={`relative overflow-hidden rounded-md border transition-all w-[18rem] h-40 ${
-                    selectedId === img.id
-                      ? "border-lime-400 bg-white/10"
-                      : "border-transparent hover:scale-[1.02] hover:border-slate-600"
-                  }`}
-                >
-                  <video
-                    src={img.previewUrl}
-                    controls={false}
-                    className="w-full h-full object-cover rounded-md"
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-        </aside>
+      {uploaded.map((img) => (
+        <button
+          key={img.id}
+          onClick={() => setSelectedId(img.id)}
+          className={`relative overflow-hidden rounded-md border transition-all w-[18rem] h-40 ${
+            selectedId === img.id
+              ? "border-lime-400 bg-white/10"
+              : "border-transparent hover:scale-[1.02] hover:border-slate-600"
+          }`}
+        >
+          <video
+            src={img.previewUrl}
+            controls={false}
+            className="w-full h-full object-cover rounded-md"
+          />
+        </button>
+      ))}
+    </div>
+  </div>
+
+  {/* Footer — Video Counter */}
+  <div className="p-5 border-t border-slate-800 flex justify-center items-center shrink-0">
+    <span className="text-m text-slate-400">
+      {uploaded.length === 1
+        ? "1 video pending"
+        : `${uploaded.length} videos pending`}
+    </span>
+  </div>
+</aside>
+
 
         {/* CENTER — Metadata Form */}
         <section className="flex-1 flex flex-col items-center overflow-y-auto py-10 px-8 custom-scroll">
@@ -88,7 +101,6 @@ export function StagingPage() {
                 />
               </div>
 
-              {/* ✅ Only show form if file exists */}
               {selectedImage.file ? (
                 <MetadataForm
                   file={selectedImage.file}
@@ -115,11 +127,13 @@ export function StagingPage() {
         </section>
 
         {/* RIGHT — Registered Files */}
-        <aside className="w-[20rem] bg-neutral-950 border-l border-slate-800 flex flex-col">
-          <div className="p-5 border-b border-slate-800">
+        <aside className="flex flex-col w-[20rem] h-full bg-neutral-950 border-l border-slate-800 overflow-hidden">
+          {/* Header */}
+          <div className="p-5 border-b border-slate-800 shrink-0">
             <h3 className="uppercase text-lg text-white">Registered</h3>
           </div>
 
+          {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto px-4 py-4 custom-scroll">
             <div className="flex flex-col items-center gap-3">
               {registered.length === 0 && (
@@ -141,8 +155,9 @@ export function StagingPage() {
             </div>
           </div>
 
+          {/* Footer */}
           {registered.length > 0 && (
-            <div className="p-5 border-t border-slate-800 flex justify-center">
+            <div className="p-5 border-t border-slate-800 flex justify-center shrink-0">
               <button
                 onClick={handleDone}
                 className="bg-lime-400 text-neutral-900 font-semibold rounded-md px-4 py-2 hover:bg-lime-300 transition"

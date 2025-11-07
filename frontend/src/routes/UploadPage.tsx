@@ -13,31 +13,26 @@ export function UploadPage() {
 
   const unsaved = images.filter((img) => !img.saved);
 
-  // ✅ Helper: fallback file name
   function getFileNameFromImage(img: { file?: File | undefined; id: string }) {
     if (img.file && img.file.name) return img.file.name;
-    return `capture_${img.id.slice(0, 6)}.jpg`;
+    return `capture_${img.id.slice(0, 6)}.mp4`;
   }
 
-  // ✅ Only update uploadedFiles when there’s an actual change
   useEffect(() => {
-    if (unsaved.length === 0) return;
+    const next = unsaved.map((img) => ({
+      id: img.id,
+      name: getFileNameFromImage(img),
+      progress: 100,
+      done: true,
+    }));
 
-    setUploadedFiles((prev) => {
-      const newUploads = unsaved.map((img) => ({
-        id: img.id,
-        name: getFileNameFromImage(img),
-        progress: 100,
-        done: true,
-      }));
+    // Avoid resetting state if nothing changed (prevents extra renders)
+    const changed =
+      next.length !== uploadedFiles.length ||
+      next.some((n, i) => n.id !== uploadedFiles[i]?.id || n.name !== uploadedFiles[i]?.name);
 
-      // Compare with previous state — if identical, skip update
-      const isSame =
-        prev.length === newUploads.length &&
-        prev.every((p, i) => p.id === newUploads[i].id);
-
-      return isSame ? prev : newUploads;
-    });
+    if (changed) setUploadedFiles(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unsaved]);
 
   const total = uploadedFiles.length;
@@ -54,13 +49,10 @@ export function UploadPage() {
       className="relative min-h-screen w-full bg-cover bg-center flex flex-col text-white"
       style={{ backgroundImage: `url(${backgroundImage})` }}
     >
-      {/* Overlay */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]" />
 
-      {/* Main content */}
       <main className="relative z-10 flex flex-col flex-1 items-center w-full pt-40 pb-16 px-8">
         <div className="w-full max-w-5xl flex flex-col items-center text-center">
-          {/* Header */}
           {!hasUploads && (
             <header className="mb-10 transition-opacity duration-300">
               <h1 className="text-3xl font-semibold mb-3">
@@ -72,7 +64,6 @@ export function UploadPage() {
             </header>
           )}
 
-          {/* Dropzone */}
           <div
             className={`w-full max-w-2xl transition-all duration-500 ${
               hasUploads ? "mb-8" : "mb-12"
@@ -81,7 +72,6 @@ export function UploadPage() {
             <FileDropzone compact={hasUploads} />
           </div>
 
-          {/* Uploaded Files List */}
           {hasUploads && (
             <section className="w-full max-w-2xl">
               <ul className="space-y-2 max-h-[30vh] overflow-y-auto pr-2 custom-scroll">
@@ -95,41 +85,29 @@ export function UploadPage() {
                         {file.name}
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-slate-300 whitespace-nowrap">
-                        {file.done ? (
-                          <>
-                            <span className="text-lime-400 font-semibold">
-                              Uploaded
-                            </span>
-                            <span className="inline-block h-4 w-4 rounded-full bg-lime-400 text-neutral-900 text-[10px] font-bold leading-4 text-center">
-                              ✓
-                            </span>
-                          </>
-                        ) : (
-                          <span>{file.progress}%</span>
-                        )}
+                      <div className="flex items-center gap-2 text-s text-slate-300 whitespace-nowrap">
+                        <span className="text-lime-400 font-semibold">
+                          Staged
+                        </span>
+                        <span className="inline-block h-4 w-4 rounded-full bg-lime-400 text-neutral-900 text-[10px] font-bold leading-4 text-center">
+                          ✓
+                        </span>
                       </div>
                     </div>
 
                     <div className="w-full h-2 bg-slate-700/50 rounded-md overflow-hidden">
-                      <div
-                        className={`h-full ${
-                          file.done ? "bg-lime-400" : "bg-lime-500"
-                        } transition-all duration-300`}
-                        style={{ width: `${file.progress}%` }}
-                      />
+                      <div className="h-full bg-lime-400 transition-all duration-300" style={{ width: "100%" }} />
                     </div>
                   </li>
                 ))}
               </ul>
 
-              {/* Footer */}
               <div className="flex items-center justify-between mt-6 text-sm">
                 <div className="text-slate-300">
                   <span className="text-white font-semibold">
                     {done}/{total}
                   </span>{" "}
-                  files uploaded
+                  files staged
                 </div>
 
                 <button

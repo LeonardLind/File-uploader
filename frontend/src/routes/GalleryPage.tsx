@@ -4,10 +4,10 @@ type MetadataItem = {
   fileId: string;
   filename: string;
   species?: string;
+  plot?: string;
   experiencePoint?: string;
   sensorId?: string;
   deploymentId?: string;
-  experienceId?: string;
   updatedAt?: string;
 };
 
@@ -22,6 +22,7 @@ export function GalleryPage() {
   useEffect(() => {
     async function fetchMetadata() {
       try {
+        setLoading(true);
         const res = await fetch(`${API_URL}/api/upload/metadata`);
         const data = await res.json();
 
@@ -40,11 +41,12 @@ export function GalleryPage() {
 
   return (
     <div className="min-h-screen w-screen bg-neutral-950 text-white flex flex-col overflow-hidden">
-      <main className="flex flex-col flex-1 px-10 py-10 items-center overflow-y-auto">
+      <main className="flex flex-col flex-1 px-10 py-10 items-center overflow-y-auto custom-scroll">
         <div className="w-full max-w-7xl">
+          {/* Header */}
           <div className="mb-10 flex items-baseline justify-between">
             <div>
-              <h1 className="text-2xl font-semibold text-white">File Manager</h1>
+              <h1 className="text-2xl font-semibold text-white">Gallery</h1>
               <p className="text-slate-400 text-sm">
                 {loading
                   ? "Loading..."
@@ -53,7 +55,10 @@ export function GalleryPage() {
             </div>
           </div>
 
-          {error && <p className="text-red-400 mb-6 text-center">Error: {error}</p>}
+          {/* Error / Loading States */}
+          {error && (
+            <p className="text-red-400 mb-6 text-center">Error: {error}</p>
+          )}
 
           {loading ? (
             <p className="text-slate-400 text-center">Fetching data...</p>
@@ -65,12 +70,12 @@ export function GalleryPage() {
                 <thead className="bg-neutral-800 text-slate-100 text-left uppercase text-xs tracking-wider">
                   <tr>
                     <th className="px-4 py-3">Species</th>
+                    <th className="px-4 py-3">Plot</th>
                     <th className="px-4 py-3">Experience Point</th>
                     <th className="px-4 py-3">Sensor</th>
                     <th className="px-4 py-3">Deployment</th>
-                    <th className="px-4 py-3">Experience</th>
                     <th className="px-4 py-3">Preview</th>
-                    <th className="px-4 py-3">File</th>
+                    <th className="px-4 py-3">Filename</th>
                     <th className="px-4 py-3">Updated</th>
                   </tr>
                 </thead>
@@ -84,29 +89,35 @@ export function GalleryPage() {
                         key={file.fileId}
                         className="border-t border-slate-800 hover:bg-neutral-800/50 transition-colors"
                       >
-                        <td className="px-4 py-3 font-medium text-white">{file.species || "—"}</td>
+                        <td className="px-4 py-3 font-medium text-white">
+                          {file.species || "—"}
+                        </td>
+                        <td className="px-4 py-3">{file.plot || "—"}</td>
                         <td className="px-4 py-3">{file.experiencePoint || "—"}</td>
                         <td className="px-4 py-3">{file.sensorId || "—"}</td>
                         <td className="px-4 py-3">{file.deploymentId || "—"}</td>
-                        <td className="px-4 py-3">{file.experienceId || "—"}</td>
                         <td className="px-4 py-3">
                           {isVideo ? (
                             <video
                               src={s3Url}
-                              className="w-20 h-12 object-cover rounded-md border border-slate-700"
+                              className="w-24 h-16 object-cover rounded-md border border-slate-700"
                               controls
                             />
                           ) : (
                             <img
                               src={s3Url}
                               alt="thumbnail"
-                              className="w-16 h-10 object-cover rounded-md border border-slate-700"
+                              className="w-16 h-12 object-cover rounded-md border border-slate-700"
                             />
                           )}
                         </td>
-                        <td className="px-4 py-3 text-slate-400">{file.filename || "—"}</td>
                         <td className="px-4 py-3 text-slate-400">
-                          {file.updatedAt ? new Date(file.updatedAt).toLocaleString() : "—"}
+                          {file.filename || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-slate-400">
+                          {file.updatedAt
+                            ? new Date(file.updatedAt).toLocaleString()
+                            : "—"}
                         </td>
                       </tr>
                     );
