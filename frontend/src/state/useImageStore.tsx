@@ -14,8 +14,9 @@ export type PendingImage = {
 
 type ImageStoreContextType = {
   images: PendingImage[];
-  addFiles: (files: File[]) => void;       // accepts File[]
+  addFiles: (files: File[]) => void;
   updateImage: (id: string, data: Partial<PendingImage>) => void;
+  removeImage: (id: string) => void;
 };
 
 const ImageStoreContext = createContext<ImageStoreContextType | null>(null);
@@ -44,8 +45,12 @@ export function ImageStoreProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  function removeImage(id: string) {
+    setImages((prev) => prev.filter((img) => img.id !== id));
+  }
+
   return (
-    <ImageStoreContext.Provider value={{ images, addFiles, updateImage }}>
+    <ImageStoreContext.Provider value={{ images, addFiles, updateImage, removeImage }}>
       {children}
     </ImageStoreContext.Provider>
   );

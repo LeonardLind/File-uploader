@@ -7,6 +7,7 @@ type FileDropzoneProps = {
   compact?: boolean;
 };
 
+// You can expand this to include more formats like mov/mkv
 const isAvi = (file: File) =>
   file.type === "video/x-msvideo" || /\.avi$/i.test(file.name);
 
@@ -16,40 +17,50 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState<string | null>(null);
 
+  // 🎬 Convert AVI to MP4 using FFmpeg WASM (class-based API)
   const convertAviToMp4 = useCallback(async (file: File): Promise<File> => {
     setStatusText("Preparing converter…");
-
-    const { ffmpeg, fetchFile } = await getFFmpeg();
-
-    setStatusText("Converting to MP4…");
     setProgress(0);
 
-    const inName = file.name;
-    const outName = inName.replace(/\.avi$/i, ".mp4");
+    const ffmpeg = await getFFmpeg();
 
-    ffmpeg.setProgress(({ ratio }: { ratio: number }) =>
-      setProgress(Math.round(ratio * 100))
-    );
+    setStatusText("Converting to MP4…");
 
-    ffmpeg.FS("writeFile", inName, await fetchFile(file));
-    await ffmpeg.run(
-      "-i",
-      inName,
-      "-c:v",
-      "libx264",
-      "-preset",
-      "veryfast",
-      "-movflags",
-      "+faststart",
-      "-c:a",
-      "aac",
-      outName
-    );
+    const inputName = file.name;
+    const outputName = inputName.replace(/\.avi$/i, ".mp4");
 
-    const data = ffmpeg.FS("readFile", outName);
-    return new File([data.buffer], outName, { type: "video/mp4" });
+    // Write AVI file to FFmpeg’s in-memory filesystem
+    const data = new Uint8Array(await file.arrayBuffer());
+    await ffmpeg.writeFile(inputName, data);
+
+    // Track progress
+    ffmpeg.on("progress", ({ progress }: { progress: number }) => {
+      setProgress(Math.round(progress * 100));
+    });
+
+    // Run the actual conversion
+    await ffmpeg.exec([
+      "-i", inputName,
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-movflags", "+faststart",
+      "-c:a", "aac",
+      outputName,
+    ]);
+
+    // Read back the result
+    const result = await ffmpeg.readFile(outputName);
+    const blob = new Blob([result.buffer], { type: "video/mp4" });
+    const converted = new File([blob], outputName, { type: "video/mp4" });
+
+    // 🧹 Clean up memory inside FFmpeg
+    await ffmpeg.deleteFile(inputName);
+    await ffmpeg.deleteFile(outputName);
+
+    return converted;
   }, []);
 
+  // 📂 Handle file drop
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
       if (!acceptedFiles.length) return;
@@ -68,12 +79,13 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
             staged.push(file);
           }
         }
+
         addFiles(staged);
         setProgress(100);
-        setStatusText("Ready for metadata");
+        setStatusText("Ready for metadata ✅");
       } catch (err) {
         console.error("Conversion error:", err);
-        setStatusText("Failed");
+        setStatusText("Conversion failed ❌");
       } finally {
         setTimeout(() => setIsWorking(false), 1200);
       }

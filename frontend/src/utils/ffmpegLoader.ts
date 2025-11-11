@@ -1,26 +1,34 @@
 // src/utils/ffmpegLoader.ts
-
 export async function loadFFmpeg() {
   try {
-    const FFmpegModule = await import(
-      /* @vite-ignore */ "https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/ffmpeg.min.mjs"
-    );
+    const mod: any = await import("@ffmpeg/ffmpeg");
 
-    const { createFFmpeg, fetchFile } = FFmpegModule as any;
+    // Detect whether it’s the class-based or function-based build
+    const FFmpegClass = mod.FFmpeg || mod.default?.FFmpeg;
+    const createFFmpeg = mod.createFFmpeg || mod.default?.createFFmpeg;
+    const fetchFile =
+      mod.fetchFile || mod.default?.fetchFile || mod.FFmpeg?.fetchFile;
 
-    if (typeof createFFmpeg !== "function") {
-      console.error("⚠️ FFmpeg module keys:", Object.keys(FFmpegModule));
-      throw new Error("❌ FFmpeg module did not export createFFmpeg()");
+    let ffmpeg: any;
+
+    if (FFmpegClass) {
+      // ✅ Newer class-based API
+      ffmpeg = new FFmpegClass();
+      console.log("🧩 Detected class-based FFmpeg build");
+    } else if (typeof createFFmpeg === "function") {
+      // ✅ Legacy factory API
+      ffmpeg = createFFmpeg({ log: true });
+      console.log("🧩 Detected function-based FFmpeg build");
+    } else {
+      console.error("⚠️ FFmpeg module keys:", Object.keys(mod));
+      throw new Error("❌ No valid FFmpeg export found");
     }
 
-    const ffmpeg = createFFmpeg({
-      log: true,
-      corePath: "https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js",
-    });
-
-    console.log("🧩 Preloading FFmpeg core from CDN...");
-    await ffmpeg.load();
-    console.log("✅ FFmpeg ready!");
+    if (!ffmpeg.isLoaded || !ffmpeg.isLoaded()) {
+      console.log("🧩 Preloading FFmpeg...");
+      await ffmpeg.load();
+      console.log("✅ FFmpeg ready!");
+    }
 
     return { ffmpeg, fetchFile };
   } catch (err) {

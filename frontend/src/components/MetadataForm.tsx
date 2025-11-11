@@ -1,4 +1,8 @@
+// src/components/MetadataForm.tsx
 import { useState } from "react";
+import { VideoTrimmer } from "./VideoTrimmer"; // ✅ use the new standalone trimmer
+import editIcon from "../assets/editicon.svg";
+import deleteIcon from "../assets/deleteIcon.svg";
 
 type Props = {
   file: File;
@@ -10,6 +14,7 @@ type Props = {
     experienceId: string;
   };
   onSave?: (data: any) => void;
+  onDelete?: () => void;
 };
 
 type OptionMap = {
@@ -20,12 +25,14 @@ type OptionMap = {
   };
 };
 
-export function MetadataForm({ file, defaultValues, onSave }: Props) {
+export function MetadataForm({ file, defaultValues, onSave, onDelete }: Props) {
   const [species, setSpecies] = useState(defaultValues.species);
   const [plot, setPlot] = useState<string | null>(null);
   const [experience, setExperience] = useState<string | null>(null);
   const [sensor, setSensor] = useState<string | null>(null);
   const [deployment, setDeployment] = useState<string | null>(null);
+  const [trimModal, setTrimModal] = useState(false);
+  const [localFile, setLocalFile] = useState<File>(file);
 
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -33,7 +40,6 @@ export function MetadataForm({ file, defaultValues, onSave }: Props) {
 
   const API_URL = import.meta.env.VITE_API_URL;
 
-  // 🧩 All option data in one nested object
   const data: OptionMap = {
     "Horto Alegria": {
       "XP1 - Cavidades": {
@@ -50,9 +56,7 @@ export function MetadataForm({ file, defaultValues, onSave }: Props) {
         Sensor_ID_61: "Deployment_ID_47",
         Sensor_ID_62: "Deployment_ID_48",
       },
-      "XP3 - Germano": {
-        Sensor_ID_72: "Deployment_ID_58",
-      },
+      "XP3 - Germano": { Sensor_ID_72: "Deployment_ID_58" },
     },
     "Mina Aguas Claras": {
       "Mata-atlantica rehab": { Sensor_ID_0: "Deployment_ID_0" },
@@ -70,7 +74,7 @@ export function MetadataForm({ file, defaultValues, onSave }: Props) {
         Sensor_ID_21: "Deployment_ID_21",
         Sensor_ID_25: "Deployment_ID_23",
         Sensor_ID_29: ["Deployment_ID_22", "Deployment_ID_24"],
-},
+      },
       "Mata-atlantica intact": {
         Sensor_ID_3: "Deployment_ID_5",
         Sensor_ID_7: "Deployment_ID_6",
@@ -124,50 +128,49 @@ export function MetadataForm({ file, defaultValues, onSave }: Props) {
     },
   };
 
-  // 🧭 Step-by-step state
-  const step = !plot ? 1 : !experience ? 2 : !sensor ? 3 : !deployment ? 4 : 5;
-
-  // 🧩 Upload process
   async function handleUpload() {
-    if (!file) return alert("No file found.");
-    if (!plot || !experience || !sensor || !deployment) {
-      alert("Please complete all selections first.");
-      return;
-    }
+    if (!localFile) return alert("No file found.");
+    if (!plot || !experience || !sensor || !deployment)
+      return alert("Please complete all selections first.");
 
     setSaving(true);
     setProgress(0);
     setSuccess(false);
 
     try {
+      // Step 1 — get presigned URL
       const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: file.name,
-          contentType: file.type || "application/octet-stream",
+          filename: localFile.name,
+          contentType: localFile.type || "application/octet-stream",
         }),
       });
       const { uploadUrl, key } = await presignRes.json();
 
+      // Step 2 — upload to S3
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        xhr.setRequestHeader("Content-Type", localFile.type);
         xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
+          if (e.lengthComputable)
+            setProgress(Math.round((e.loaded / e.total) * 100));
         };
-        xhr.onload = () => (xhr.status < 300 ? resolve() : reject());
-        xhr.onerror = () => reject();
-        xhr.send(file);
+        xhr.onload = () =>
+          xhr.status < 300 ? resolve() : reject(new Error("Upload failed"));
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(localFile);
       });
 
+      // Step 3 — save metadata
       const metaRes = await fetch(`${API_URL}/api/upload/metadata`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fileId: key,
-          filename: file.name,
+          filename: localFile.name,
           species,
           plot,
           experiencePoint: experience,
@@ -177,7 +180,8 @@ export function MetadataForm({ file, defaultValues, onSave }: Props) {
       });
 
       const metaData = await metaRes.json();
-      if (!metaData.success) throw new Error(metaData.error);
+      if (!metaData.success)
+        throw new Error(metaData.error || "Failed to save metadata");
 
       setSuccess(true);
       onSave?.(metaData.item);
@@ -189,7 +193,6 @@ export function MetadataForm({ file, defaultValues, onSave }: Props) {
     }
   }
 
-  // 🧩 Render helpers
   const renderOptions = (options: string[], onSelect: (val: string) => void) => (
     <div className="flex flex-wrap gap-3 justify-center">
       {options.map((opt) => (
@@ -206,74 +209,111 @@ export function MetadataForm({ file, defaultValues, onSave }: Props) {
 
   return (
     <div className="w-full max-w-3xl flex flex-col gap-6 px-2">
-      {/* 🐾 Species */}
+      {trimModal && (
+        <VideoTrimmer
+          file={localFile}
+          onTrimmed={(trimmed: File) => setLocalFile(trimmed)}
+          onClose={() => setTrimModal(false)}
+        />
+      )}
+
+      {/* Species + Actions */}
       <div className="flex flex-col gap-2">
         <label className="text-sm text-slate-300">Species name</label>
-        <input
-          type="text"
-          value={species}
-          onChange={(e) => setSpecies(e.target.value)}
-          placeholder="Enter species"
-          className="w-full h-12 rounded-md bg-transparent border border-slate-600 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
-        />
+        <div className="flex items-center gap-3">
+          <input
+            type="text"
+            value={species}
+            onChange={(e) => setSpecies(e.target.value)}
+            placeholder="Enter species"
+            className="flex-1 h-12 rounded-md bg-transparent border border-slate-600 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
+          />
+
+          {/* Trim button */}
+          <button
+          type="button"
+          onClick={() => setTrimModal(true)}
+          className="w-9 h-9 flex items-center justify-center rounded-full border border-slate-600 bg-neutral-800 hover:bg-lime-500 transition"
+          title="Trim video"
+          >
+            <img
+            src={editIcon}
+            alt="Trim"
+            className="w-5 h-5 invert group-hover:invert-0 transition"
+            />
+            </button>
+
+          {/* Delete button */}
+          <button
+            type="button"
+            onClick={onDelete}
+            className="w-9 h-9 flex items-center justify-center rounded-full border border-red-500/70 text-red-400 bg-neutral-800 hover:bg-red-500 hover:text-black transition"
+            title="Remove from upload list"
+          >
+            <img
+            src={deleteIcon}
+            alt="Trim"
+            className="w-5 h-5 invert group-hover:invert-0 transition"
+            />
+          </button>
+        </div>
       </div>
 
-      {/* Step 1 - Plot */}
-      {step >= 1 && !plot && (
+      {/* Steps remain unchanged */}
+      {!plot && (
         <>
           <h3 className="text-lg font-semibold text-lime-400">Select Plot</h3>
           {renderOptions(Object.keys(data), setPlot)}
         </>
       )}
 
-      {/* Step 2 - Experience */}
-      {step >= 2 && plot && !experience && (
+      {plot && !experience && (
         <>
-          <h3 className="text-lg font-semibold text-lime-400">Select Experience Point</h3>
+          <h3 className="text-lg font-semibold text-lime-400">
+            Select Experience Point
+          </h3>
           {renderOptions(Object.keys(data[plot]), setExperience)}
         </>
       )}
 
-      {/* Step 3 - Sensor */}
-      {step >= 3 && plot && experience && !sensor && (
+      {plot && experience && !sensor && (
         <>
           <h3 className="text-lg font-semibold text-lime-400">Select Sensor</h3>
           {renderOptions(Object.keys(data[plot][experience]), setSensor)}
         </>
       )}
 
-{/* Step 4 - Deployment */}
-{step >= 4 && plot && experience && sensor && !deployment && (
-  <>
-    <h3 className="text-lg font-semibold text-lime-400">Select Deployment</h3>
-    <div className="flex flex-wrap justify-center gap-3">
-      {Array.isArray(data[plot][experience][sensor])
-        ? (data[plot][experience][sensor] as string[]).map((dep) => (
-            <button
-              key={dep}
-              onClick={() => setDeployment(dep)}
-              className="px-4 py-2 bg-neutral-800 text-slate-200 rounded-md border border-slate-700 hover:bg-lime-500 hover:text-black transition"
-            >
-              {dep}
-            </button>
-          ))
-        : (
-            <button
-              onClick={() =>
-                setDeployment(data[plot][experience][sensor] as string)
-              }
-              className="px-4 py-2 bg-neutral-800 text-slate-200 rounded-md border border-slate-700 hover:bg-lime-500 hover:text-black transition"
-            >
-              {data[plot][experience][sensor]}
-            </button>
-          )}
-    </div>
-  </>
-)}
+      {plot && experience && sensor && !deployment && (
+        <>
+          <h3 className="text-lg font-semibold text-lime-400">
+            Select Deployment
+          </h3>
+          <div className="flex flex-wrap justify-center gap-3">
+            {Array.isArray(data[plot][experience][sensor])
+              ? (data[plot][experience][sensor] as string[]).map((dep) => (
+                  <button
+                    key={dep}
+                    onClick={() => setDeployment(dep)}
+                    className="px-4 py-2 bg-neutral-800 text-slate-200 rounded-md border border-slate-700 hover:bg-lime-500 hover:text-black transition"
+                  >
+                    {dep}
+                  </button>
+                ))
+              : (
+                <button
+                  onClick={() =>
+                    setDeployment(data[plot][experience][sensor] as string)
+                  }
+                  className="px-4 py-2 bg-neutral-800 text-slate-200 rounded-md border border-slate-700 hover:bg-lime-500 hover:text-black transition"
+                >
+                  {data[plot][experience][sensor]}
+                </button>
+              )}
+          </div>
+        </>
+      )}
 
-
-      {/* Step 5 - Upload */}
-      {step >= 5 && plot && experience && sensor && deployment && (
+      {plot && experience && sensor && deployment && (
         <div className="flex flex-col gap-3 mt-6">
           <button
             onClick={handleUpload}

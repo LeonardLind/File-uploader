@@ -6,7 +6,7 @@ import { MetadataForm } from "../components/MetadataForm";
 
 export function StagingPage() {
   const navigate = useNavigate();
-  const { images, updateImage } = useImageStore();
+  const { images, updateImage, removeImage } = useImageStore();
 
   const uploaded = images.filter((img) => !img.saved);
   const registered = images.filter((img) => img.saved);
@@ -33,6 +33,12 @@ export function StagingPage() {
 
     // Automatically move to next unsaved
     const remaining = uploaded.filter((img) => img.id !== selectedImage.id);
+    setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+  }
+
+  function handleDeleteCurrent(id: string) {
+    const remaining = uploaded.filter((img) => img.id !== id);
+    removeImage(id);
     setSelectedId(remaining.length > 0 ? remaining[0].id : null);
   }
 
@@ -112,6 +118,7 @@ export function StagingPage() {
                     experienceId: "",
                   }}
                   onSave={handleSave}
+                  onDelete={() => handleDeleteCurrent(selectedImage.id)}
                 />
               ) : (
                 <p className="text-slate-400 text-center">
