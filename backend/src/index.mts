@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import uploadRoutes from "./routes/uploadRoutes.mjs"; 
+import uploadRoutes from "./routes/uploadRoutes.mjs";
 
 dotenv.config();
 
@@ -19,5 +19,5 @@ app.get("/", (_req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });

@@ -85,7 +85,7 @@ export function UploadPage() {
                         {file.name}
                       </div>
 
-                      <div className="flex items-center gap-2 text-s text-slate-300 whitespace-nowrap">
+                      <div className="flex items-center gap-2 text-xs text-slate-300 whitespace-nowrap">
                         <span className="text-lime-400 font-semibold">
                           Staged
                         </span>

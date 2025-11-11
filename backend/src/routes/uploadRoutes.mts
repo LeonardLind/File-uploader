@@ -4,6 +4,8 @@ import {
   saveMetadata,
   getAllMetadata,
   getMetadata,
+  updateMetadata, // 🆕 new controller
+  deleteFileAndMetadata, // 🆕 new controller
 } from "../controllers/uploadController.mjs";
 
 const router = express.Router();
@@ -15,5 +17,11 @@ router.post("/presign", generatePresignedUrl);
 router.post("/metadata", saveMetadata);
 router.get("/metadata", getAllMetadata);
 router.get("/metadata/:fileId", getMetadata);
+
+// 🆕 Update metadata
+router.put("/metadata/update", updateMetadata);
+
+// 🆕 Delete metadata + S3 file
+router.delete("/delete", deleteFileAndMetadata);
 
 export default router;

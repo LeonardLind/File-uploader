@@ -1,6 +1,6 @@
 // src/components/MetadataForm.tsx
 import { useState } from "react";
-import { VideoTrimmer } from "./VideoTrimmer"; // ✅ use the new standalone trimmer
+import { VideoTrimmer } from "./VideoTrimmer";
 import editIcon from "../assets/editicon.svg";
 import deleteIcon from "../assets/deleteIcon.svg";
 
@@ -8,6 +8,7 @@ type Props = {
   file: File;
   defaultValues: {
     species: string;
+    plot?: string;
     experiencePoint: string;
     sensorId: string;
     deploymentId: string;
@@ -15,6 +16,7 @@ type Props = {
   };
   onSave?: (data: any) => void;
   onDelete?: () => void;
+  editMode?: boolean; // 🆕 edit existing mode
 };
 
 type OptionMap = {
@@ -25,12 +27,24 @@ type OptionMap = {
   };
 };
 
-export function MetadataForm({ file, defaultValues, onSave, onDelete }: Props) {
+export function MetadataForm({
+  file,
+  defaultValues,
+  onSave,
+  onDelete,
+  editMode = false,
+}: Props) {
   const [species, setSpecies] = useState(defaultValues.species);
-  const [plot, setPlot] = useState<string | null>(null);
-  const [experience, setExperience] = useState<string | null>(null);
-  const [sensor, setSensor] = useState<string | null>(null);
-  const [deployment, setDeployment] = useState<string | null>(null);
+  const [plot, setPlot] = useState<string | null>(defaultValues.plot || null);
+  const [experience, setExperience] = useState<string | null>(
+    defaultValues.experiencePoint || null
+  );
+  const [sensor, setSensor] = useState<string | null>(
+    defaultValues.sensorId || null
+  );
+  const [deployment, setDeployment] = useState<string | null>(
+    defaultValues.deploymentId || null
+  );
   const [trimModal, setTrimModal] = useState(false);
   const [localFile, setLocalFile] = useState<File>(file);
 
@@ -128,71 +142,93 @@ export function MetadataForm({ file, defaultValues, onSave, onDelete }: Props) {
     },
   };
 
-  async function handleUpload() {
-    if (!localFile) return alert("No file found.");
+  async function handleSaveClick() {
     if (!plot || !experience || !sensor || !deployment)
-      return alert("Please complete all selections first.");
+      return alert("Please complete all fields first.");
 
     setSaving(true);
     setProgress(0);
     setSuccess(false);
 
     try {
-      // Step 1 — get presigned URL
-      const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filename: localFile.name,
-          contentType: localFile.type || "application/octet-stream",
-        }),
-      });
-      const { uploadUrl, key } = await presignRes.json();
+      if (editMode) {
+        // 🟡 Update existing metadata
+        const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: localFile.name,
+            species,
+            plot,
+            experiencePoint: experience,
+            sensorId: sensor,
+            deploymentId: deployment,
+          }),
+        });
+        const data = await res.json();
+        if (!data.success)
+          throw new Error(data.error || "Failed to update metadata");
 
-      // Step 2 — upload to S3
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", localFile.type);
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable)
-            setProgress(Math.round((e.loaded / e.total) * 100));
-        };
-        xhr.onload = () =>
-          xhr.status < 300 ? resolve() : reject(new Error("Upload failed"));
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.send(localFile);
-      });
+        setSuccess(true);
+        onSave?.(data.item);
+      } else {
+        // 🟢 Create new upload + metadata
+        const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: localFile.name,
+            contentType: localFile.type || "application/octet-stream",
+          }),
+        });
+        const { uploadUrl, key } = await presignRes.json();
 
-      // Step 3 — save metadata
-      const metaRes = await fetch(`${API_URL}/api/upload/metadata`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: key,
-          filename: localFile.name,
-          species,
-          plot,
-          experiencePoint: experience,
-          sensorId: sensor,
-          deploymentId: deployment,
-        }),
-      });
+        // Upload to S3
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", uploadUrl);
+          xhr.setRequestHeader("Content-Type", localFile.type);
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable)
+              setProgress(Math.round((e.loaded / e.total) * 100));
+          };
+          xhr.onload = () =>
+            xhr.status < 300 ? resolve() : reject(new Error("Upload failed"));
+          xhr.onerror = () => reject(new Error("Network error"));
+          xhr.send(localFile);
+        });
 
-      const metaData = await metaRes.json();
-      if (!metaData.success)
-        throw new Error(metaData.error || "Failed to save metadata");
+        // Save metadata
+        const metaRes = await fetch(`${API_URL}/api/upload/metadata`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileId: key,
+            filename: localFile.name,
+            species,
+            plot,
+            experiencePoint: experience,
+            sensorId: sensor,
+            deploymentId: deployment,
+          }),
+        });
 
-      setSuccess(true);
-      onSave?.(metaData.item);
+        const metaData = await metaRes.json();
+        if (!metaData.success)
+          throw new Error(metaData.error || "Failed to save metadata");
+
+        setSuccess(true);
+        onSave?.(metaData.item);
+      }
     } catch (err: any) {
-      alert("Upload failed: " + err.message);
+      alert("Save failed: " + err.message);
     } finally {
       setSaving(false);
       setProgress(0);
     }
   }
 
+  // Helper renderer for multi-step buttons
   const renderOptions = (options: string[], onSelect: (val: string) => void) => (
     <div className="flex flex-wrap gap-3 justify-center">
       {options.map((opt) => (
@@ -207,6 +243,90 @@ export function MetadataForm({ file, defaultValues, onSave, onDelete }: Props) {
     </div>
   );
 
+  // 🟡 --- EDIT MODE (Compact Layout) ---
+  if (editMode) {
+    return (
+      <div className="w-full max-w-3xl flex flex-col gap-4 px-2 border border-yellow-400/40 rounded-lg p-4">
+        {trimModal && (
+          <VideoTrimmer
+            file={localFile}
+            onTrimmed={(trimmed: File) => setLocalFile(trimmed)}
+            onClose={() => setTrimModal(false)}
+          />
+        )}
+
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-yellow-400">
+            Edit Metadata
+          </h3>
+          <button
+            onClick={onDelete}
+            className="text-red-400 border border-red-400 px-3 py-1 rounded hover:bg-red-500 hover:text-black transition"
+          >
+            Delete Video
+          </button>
+        </div>
+
+        <label className="text-sm text-slate-300">Species</label>
+        <input
+          value={species}
+          onChange={(e) => setSpecies(e.target.value)}
+          className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white"
+        />
+
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            value={plot || ""}
+            onChange={(e) => setPlot(e.target.value)}
+            placeholder="Plot"
+            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white"
+          />
+          <input
+            value={experience || ""}
+            onChange={(e) => setExperience(e.target.value)}
+            placeholder="Experience"
+            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white"
+          />
+          <input
+            value={sensor || ""}
+            onChange={(e) => setSensor(e.target.value)}
+            placeholder="Sensor"
+            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white"
+          />
+          <input
+            value={deployment || ""}
+            onChange={(e) => setDeployment(e.target.value)}
+            placeholder="Deployment"
+            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white"
+          />
+        </div>
+
+        <div className="flex justify-between items-center mt-4">
+          <button
+            onClick={() => setTrimModal(true)}
+            className="flex items-center gap-2 border border-yellow-400 text-yellow-300 rounded-md px-3 py-1 hover:bg-yellow-400 hover:text-black transition"
+          >
+            <img src={editIcon} alt="Trim" className="w-4 h-4" />
+            Trim Video
+          </button>
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleSaveClick}
+              disabled={saving}
+              className={`bg-yellow-400 text-black font-semibold px-5 py-2 rounded-md transition ${
+                saving ? "opacity-50 cursor-wait" : "hover:bg-yellow-300"
+              }`}
+            >
+              {saving ? "Saving..." : success ? "Updated ✅" : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 🟢 --- NORMAL MODE (Multi-step Upload Flow) ---
   return (
     <div className="w-full max-w-3xl flex flex-col gap-6 px-2">
       {trimModal && (
@@ -231,17 +351,17 @@ export function MetadataForm({ file, defaultValues, onSave, onDelete }: Props) {
 
           {/* Trim button */}
           <button
-          type="button"
-          onClick={() => setTrimModal(true)}
-          className="w-9 h-9 flex items-center justify-center rounded-full border border-slate-600 bg-neutral-800 hover:bg-lime-500 transition"
-          title="Trim video"
+            type="button"
+            onClick={() => setTrimModal(true)}
+            className="w-9 h-9 flex items-center justify-center rounded-full border border-slate-600 bg-neutral-800 hover:bg-lime-500 transition"
+            title="Trim video"
           >
             <img
-            src={editIcon}
-            alt="Trim"
-            className="w-5 h-5 invert group-hover:invert-0 transition"
+              src={editIcon}
+              alt="Trim"
+              className="w-5 h-5 invert group-hover:invert-0 transition"
             />
-            </button>
+          </button>
 
           {/* Delete button */}
           <button
@@ -251,15 +371,15 @@ export function MetadataForm({ file, defaultValues, onSave, onDelete }: Props) {
             title="Remove from upload list"
           >
             <img
-            src={deleteIcon}
-            alt="Trim"
-            className="w-5 h-5 invert group-hover:invert-0 transition"
+              src={deleteIcon}
+              alt="Delete"
+              className="w-5 h-5 invert group-hover:invert-0 transition"
             />
           </button>
         </div>
       </div>
 
-      {/* Steps remain unchanged */}
+      {/* Multi-step plot/experience/sensor/deployment selection */}
       {!plot && (
         <>
           <h3 className="text-lg font-semibold text-lime-400">Select Plot</h3>
@@ -316,7 +436,7 @@ export function MetadataForm({ file, defaultValues, onSave, onDelete }: Props) {
       {plot && experience && sensor && deployment && (
         <div className="flex flex-col gap-3 mt-6">
           <button
-            onClick={handleUpload}
+            onClick={handleSaveClick}
             disabled={saving}
             className={`bg-lime-400 text-neutral-900 font-semibold px-6 py-2 rounded-md transition ${
               saving ? "opacity-50 cursor-wait" : "hover:bg-lime-300"
