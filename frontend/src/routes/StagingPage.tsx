@@ -15,6 +15,8 @@ type PendingImage = {
   experiencePoint?: string;
   sensorId?: string;
   deploymentId?: string;
+  uploading?: boolean;
+  progress?: number;
 };
 
 type ExistingVideo = {
@@ -49,7 +51,10 @@ export function StagingPage() {
   const [editMode, setEditMode] = useState(false);
 
   const uploaded = images.filter((img) => !img.saved);
-  const registered = images.filter((img) => img.saved);
+  const registered = images
+  .filter((img) => img.saved)
+  .sort((a, b) => Number(b.uploading) - Number(a.uploading));
+
   const API_URL = import.meta.env.VITE_API_URL;
 
   useEffect(() => {
@@ -82,7 +87,6 @@ export function StagingPage() {
     if (!selectedImage) return;
 
     if (isExistingVideo(selectedImage)) {
-      // ✅ EDIT MODE
       try {
         const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
           method: "PUT",
@@ -100,15 +104,15 @@ export function StagingPage() {
             f.fileId === selectedImage.fileId ? { ...f, ...savedData } : f
           )
         );
-        alert("✅ Metadata updated successfully!");
+        alert(" Metadata updated successfully!");
       } catch (err) {
-        alert("❌ Failed to update metadata");
+        alert(" Failed to update metadata");
         console.error(err);
       }
     } else if (isPendingImage(selectedImage)) {
-      // ✅ NORMAL MODE
+      // ✅ Normal upload mode
       updateImage(selectedImage.id, { ...savedData, saved: true });
-      const remaining = uploaded.filter((img) => img.id !== selectedImage.id);
+      const remaining = images.filter((img) => !img.saved && img.id !== selectedImage.id);
       setSelectedId(remaining.length > 0 ? remaining[0].id : null);
     }
   }
@@ -129,7 +133,7 @@ export function StagingPage() {
       }
     } else {
       removeImage(id);
-      const remaining = uploaded.filter((img) => img.id !== id);
+      const remaining = images.filter((img) => !img.saved && img.id !== id);
       setSelectedId(remaining.length > 0 ? remaining[0].id : null);
     }
   }
@@ -199,7 +203,7 @@ export function StagingPage() {
         {/* CENTER FORM */}
         <section className="flex-1 flex flex-col items-center overflow-y-auto py-10 px-8 custom-scroll">
           {selectedImage ? (
-            <>
+            <div className="flex flex-col items-center w-full">
               <div className="bg-black rounded-md p-4 mb-10 shadow-md max-w-3xl w-full flex justify-center relative">
                 <video
                   src={
@@ -211,11 +215,6 @@ export function StagingPage() {
                   controls
                   className="rounded-md max-h-[400px] object-contain"
                 />
-                {isExistingVideo(selectedImage) && (
-                  <div className="absolute top-3 left-3 bg-yellow-400 text-black font-semibold text-xs px-2 py-1 rounded">
-                    Editing Existing
-                  </div>
-                )}
               </div>
 
               <MetadataForm
@@ -242,11 +241,10 @@ export function StagingPage() {
                 }
                 editMode={isExistingVideo(selectedImage)}
               />
-            </>
+            </div>
           ) : (
             <p className="text-slate-400 mt-20 text-center">
-              Select a file to begin{" "}
-              {editMode ? "editing" : "adding"} metadata
+              Select a file to begin {editMode ? "editing" : "adding"} metadata
             </p>
           )}
         </section>
@@ -263,6 +261,7 @@ export function StagingPage() {
                 {registered.length === 0 && (
                   <p className="text-slate-500 text-xs text-center">None yet</p>
                 )}
+
                 {registered.map((img) => (
                   <div
                     key={img.id}
@@ -273,6 +272,14 @@ export function StagingPage() {
                       className="w-full h-full object-cover rounded-md"
                       controls={false}
                     />
+                    {img.uploading && (
+                      <div className="absolute bottom-0 left-0 w-full bg-slate-700 h-2">
+                        <div
+                          className="bg-lime-400 h-2 transition-all duration-300"
+                          style={{ width: `${img.progress ?? 0}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

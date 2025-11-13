@@ -1,5 +1,5 @@
-// src/components/MetadataForm.tsx
 import { useState } from "react";
+import { useImageStore } from "../state/useImageStore";
 import { VideoTrimmer } from "./VideoTrimmer";
 import editIcon from "../assets/editicon.svg";
 import deleteIcon from "../assets/deleteIcon.svg";
@@ -51,6 +51,10 @@ export function MetadataForm({
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState(0);
   const [success, setSuccess] = useState(false);
+
+  const { updateImage, images } = useImageStore();
+  const currentImage = images.find((i) => i.file.name === file.name);
+  const localId = currentImage?.id;
 
   const API_URL = import.meta.env.VITE_API_URL;
 
@@ -143,92 +147,101 @@ export function MetadataForm({
   };
 
   async function handleSaveClick() {
-    if (!plot || !experience || !sensor || !deployment)
-      return alert("Please complete all fields first.");
+  if (!plot || !experience || !sensor || !deployment)
+    return alert("Please complete all fields first.");
 
-    setSaving(true);
-    setProgress(0);
-    setSuccess(false);
-
-    try {
-      if (editMode) {
-        // 🟡 Update existing metadata
-        const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: localFile.name,
-            species,
-            plot,
-            experiencePoint: experience,
-            sensorId: sensor,
-            deploymentId: deployment,
-          }),
-        });
-        const data = await res.json();
-        if (!data.success)
-          throw new Error(data.error || "Failed to update metadata");
-
-        setSuccess(true);
-        onSave?.(data.item);
-      } else {
-        // 🟢 Create new upload + metadata
-        const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: localFile.name,
-            contentType: localFile.type || "application/octet-stream",
-          }),
-        });
-        const { uploadUrl, key } = await presignRes.json();
-
-        // Upload to S3
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open("PUT", uploadUrl);
-          xhr.setRequestHeader("Content-Type", localFile.type);
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable)
-              setProgress(Math.round((e.loaded / e.total) * 100));
-          };
-          xhr.onload = () =>
-            xhr.status < 300 ? resolve() : reject(new Error("Upload failed"));
-          xhr.onerror = () => reject(new Error("Network error"));
-          xhr.send(localFile);
-        });
-
-        // Save metadata
-        const metaRes = await fetch(`${API_URL}/api/upload/metadata`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileId: key,
-            filename: localFile.name,
-            species,
-            plot,
-            experiencePoint: experience,
-            sensorId: sensor,
-            deploymentId: deployment,
-          }),
-        });
-
-        const metaData = await metaRes.json();
-        if (!metaData.success)
-          throw new Error(metaData.error || "Failed to save metadata");
-
-        setSuccess(true);
-        onSave?.(metaData.item);
-      }
-    } catch (err: any) {
-      alert("Save failed: " + err.message);
-    } finally {
-      setSaving(false);
-      setProgress(0);
-    }
+  // ✅ Move the file immediately to the right sidebar
+  if (localId) {
+    updateImage(localId, {
+      uploading: true,
+      saved: true,
+      progress: 0,
+      species,
+      plot,
+      experiencePoint: experience,
+      sensorId: sensor,
+      deploymentId: deployment,
+    });
   }
 
-  // Helper renderer for multi-step buttons
+  // ✅ Instantly reset the central form for the next video
+  setSpecies("");
+  setPlot(null);
+  setExperience(null);
+  setSensor(null);
+  setDeployment(null);
+  setSuccess(false);
+
+  // ✅ Start upload in background
+  setSaving(true);
+  setProgress(0);
+
+  try {
+    const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: localFile.name,
+        contentType: localFile.type || "application/octet-stream",
+      }),
+    });
+    const { uploadUrl, key } = await presignRes.json();
+
+    // Upload to S3
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl);
+      xhr.setRequestHeader("Content-Type", localFile.type);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && localId) {
+          const p = Math.round((e.loaded / e.total) * 100);
+          updateImage(localId, { progress: p });
+        }
+      };
+      xhr.onload = () =>
+        xhr.status < 300 ? resolve() : reject(new Error("Upload failed"));
+      xhr.onerror = () => reject(new Error("Network error"));
+      xhr.send(localFile);
+    });
+
+    // Save metadata
+    const metaRes = await fetch(`${API_URL}/api/upload/metadata`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileId: key,
+        filename: localFile.name,
+        species,
+        plot,
+        experiencePoint: experience,
+        sensorId: sensor,
+        deploymentId: deployment,
+      }),
+    });
+
+    const metaData = await metaRes.json();
+    if (!metaData.success)
+      throw new Error(metaData.error || "Failed to save metadata");
+
+    if (localId)
+      updateImage(localId, {
+        uploading: false,
+        progress: 100,
+      });
+
+    setSuccess(true);
+    onSave?.(metaData.item);
+  } catch (err: any) {
+    alert("Save failed: " + err.message);
+    if (localId) updateImage(localId, { uploading: false });
+  } finally {
+    setSaving(false);
+    setProgress(0);
+  }
+}
+
+
+
   const renderOptions = (options: string[], onSelect: (val: string) => void) => (
     <div className="flex flex-wrap gap-3 justify-center">
       {options.map((opt) => (
@@ -246,7 +259,7 @@ export function MetadataForm({
   // 🟡 --- EDIT MODE (Compact Layout) ---
   if (editMode) {
     return (
-      <div className="w-full max-w-3xl flex flex-col gap-4 px-2 border border-yellow-400/40 rounded-lg p-4">
+      <div className="w-full max-w-3xl flex flex-col gap-5 px-2 border border-slate-800 rounded-xl p-5 bg-neutral-900/60 shadow-md">
         {trimModal && (
           <VideoTrimmer
             file={localFile}
@@ -255,23 +268,41 @@ export function MetadataForm({
           />
         )}
 
+        {/* Header Row */}
         <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-yellow-400">
-            Edit Metadata
-          </h3>
-          <button
-            onClick={onDelete}
-            className="text-red-400 border border-red-400 px-3 py-1 rounded hover:bg-red-500 hover:text-black transition"
-          >
-            Delete Video
-          </button>
+          <h3 className="text-lg font-semibold text-sky-400">Edit Metadata</h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTrimModal(true)}
+              className="w-9 h-9 flex items-center justify-center rounded-full border border-slate-600 bg-neutral-800 hover:bg-lime-500 hover:text-black transition"
+              title="Trim video"
+            >
+              <img
+                src={editIcon}
+                alt="Trim"
+                className="w-5 h-5 invert group-hover:invert-0 transition"
+              />
+            </button>
+            <button
+              onClick={onDelete}
+              className="w-9 h-9 flex items-center justify-center rounded-full border border-red-500/70 text-red-400 bg-neutral-800 hover:bg-red-500 hover:text-black transition"
+              title="Delete video"
+            >
+              <img
+                src={deleteIcon}
+                alt="Delete"
+                className="w-5 h-5 invert group-hover:invert-0 transition"
+              />
+            </button>
+          </div>
         </div>
 
+        {/* Editable fields */}
         <label className="text-sm text-slate-300">Species</label>
         <input
           value={species}
           onChange={(e) => setSpecies(e.target.value)}
-          className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white"
+          className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-sky-400/40 focus:border-sky-400 transition"
         />
 
         <div className="grid grid-cols-2 gap-3">
@@ -279,48 +310,38 @@ export function MetadataForm({
             value={plot || ""}
             onChange={(e) => setPlot(e.target.value)}
             placeholder="Plot"
-            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white"
+            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-sky-400/40 focus:border-sky-400 transition"
           />
           <input
             value={experience || ""}
             onChange={(e) => setExperience(e.target.value)}
             placeholder="Experience"
-            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white"
+            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-sky-400/40 focus:border-sky-400 transition"
           />
           <input
             value={sensor || ""}
             onChange={(e) => setSensor(e.target.value)}
             placeholder="Sensor"
-            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white"
+            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-sky-400/40 focus:border-sky-400 transition"
           />
           <input
             value={deployment || ""}
             onChange={(e) => setDeployment(e.target.value)}
             placeholder="Deployment"
-            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white"
+            className="bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-sky-400/40 focus:border-sky-400 transition"
           />
         </div>
 
-        <div className="flex justify-between items-center mt-4">
+        <div className="flex justify-end mt-4">
           <button
-            onClick={() => setTrimModal(true)}
-            className="flex items-center gap-2 border border-yellow-400 text-yellow-300 rounded-md px-3 py-1 hover:bg-yellow-400 hover:text-black transition"
+            onClick={handleSaveClick}
+            disabled={saving}
+            className={`bg-sky-400 text-black font-semibold px-6 py-2 rounded-md transition ${
+              saving ? "opacity-50 cursor-wait" : "hover:bg-sky-300"
+            }`}
           >
-            <img src={editIcon} alt="Trim" className="w-4 h-4" />
-            Trim Video
+            {saving ? "Saving..." : success ? "Updated ✅" : "Save Changes"}
           </button>
-
-          <div className="flex gap-3">
-            <button
-              onClick={handleSaveClick}
-              disabled={saving}
-              className={`bg-yellow-400 text-black font-semibold px-5 py-2 rounded-md transition ${
-                saving ? "opacity-50 cursor-wait" : "hover:bg-yellow-300"
-              }`}
-            >
-              {saving ? "Saving..." : success ? "Updated ✅" : "Save Changes"}
-            </button>
-          </div>
         </div>
       </div>
     );
@@ -348,8 +369,6 @@ export function MetadataForm({
             placeholder="Enter species"
             className="flex-1 h-12 rounded-md bg-transparent border border-slate-600 px-4 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-lime-500/40 focus:border-lime-500 transition"
           />
-
-          {/* Trim button */}
           <button
             type="button"
             onClick={() => setTrimModal(true)}
@@ -362,8 +381,6 @@ export function MetadataForm({
               className="w-5 h-5 invert group-hover:invert-0 transition"
             />
           </button>
-
-          {/* Delete button */}
           <button
             type="button"
             onClick={onDelete}
@@ -447,18 +464,9 @@ export function MetadataForm({
                 ? `Uploading ${progress}%...`
                 : "Uploading..."
               : success
-              ? "Uploaded ✅"
+              ? "Uploaded"
               : "Upload & Save"}
           </button>
-
-          {saving && (
-            <div className="w-full bg-slate-700 rounded-md h-2 overflow-hidden">
-              <div
-                className="bg-lime-400 h-2 transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          )}
         </div>
       )}
     </div>

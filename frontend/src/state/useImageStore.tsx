@@ -5,8 +5,11 @@ export type PendingImage = {
   file: File;
   previewUrl: string;
   saved: boolean;
-  // optional fields you might merge in later:
+  uploading?: boolean;
+  progress?: number;
+  // optional metadata fields
   species?: string;
+  plot?: string;
   experiencePoint?: string;
   sensorId?: string;
   deploymentId?: string;
@@ -33,9 +36,10 @@ export function ImageStoreProvider({ children }: { children: ReactNode }) {
         file,
         previewUrl,
         saved: false,
+        uploading: false,
+        progress: 0,
       } satisfies PendingImage;
     });
-
     setImages((prev) => [...prev, ...next]);
   }
 
@@ -50,7 +54,9 @@ export function ImageStoreProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ImageStoreContext.Provider value={{ images, addFiles, updateImage, removeImage }}>
+    <ImageStoreContext.Provider
+      value={{ images, addFiles, updateImage, removeImage }}
+    >
       {children}
     </ImageStoreContext.Provider>
   );
@@ -58,6 +64,7 @@ export function ImageStoreProvider({ children }: { children: ReactNode }) {
 
 export function useImageStore() {
   const ctx = useContext(ImageStoreContext);
-  if (!ctx) throw new Error("useImageStore must be used inside <ImageStoreProvider>");
+  if (!ctx)
+    throw new Error("useImageStore must be used inside <ImageStoreProvider>");
   return ctx;
 }
