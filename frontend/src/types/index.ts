@@ -6,6 +6,5 @@ export interface PendingImage {
   experiencePoint?: string;
   sensorId?: string;
   deploymentId?: string;
-  experienceId?: string;
 
 }

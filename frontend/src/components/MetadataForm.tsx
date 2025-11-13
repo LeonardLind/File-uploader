@@ -4,6 +4,10 @@ import { VideoTrimmer } from "./VideoTrimmer";
 import editIcon from "../assets/editicon.svg";
 import deleteIcon from "../assets/deleteIcon.svg";
 
+// 🔹 NEW: for thumbnail generation
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile } from "@ffmpeg/util";
+
 type Props = {
   file: File;
   defaultValues: {
@@ -12,11 +16,11 @@ type Props = {
     experiencePoint: string;
     sensorId: string;
     deploymentId: string;
-    experienceId: string;
+    fileId: string
   };
   onSave?: (data: any) => void;
   onDelete?: () => void;
-  editMode?: boolean; // 🆕 edit existing mode
+  editMode?: boolean; // edit existing mode
 };
 
 type OptionMap = {
@@ -147,100 +151,193 @@ export function MetadataForm({
   };
 
   async function handleSaveClick() {
-  if (!plot || !experience || !sensor || !deployment)
-    return alert("Please complete all fields first.");
+    if (!plot || !experience || !sensor || !deployment) {
+      return;
+    }
 
-  // ✅ Move the file immediately to the right sidebar
-  if (localId) {
-    updateImage(localId, {
-      uploading: true,
-      saved: true,
-      progress: 0,
-      species,
-      plot,
-      experiencePoint: experience,
-      sensorId: sensor,
-      deploymentId: deployment,
-    });
-  }
+    // 🟡 EDIT MODE: only update metadata (no thumbnail / no reupload)
+    if (editMode) {
+      try {
+        setSaving(true);
+        setSuccess(false);
 
-  // ✅ Instantly reset the central form for the next video
-  setSpecies("");
-  setPlot(null);
-  setExperience(null);
-  setSensor(null);
-  setDeployment(null);
-  setSuccess(false);
+        const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileId: defaultValues.fileId, 
+            species,
+            plot,
+            experiencePoint: experience,
+            sensorId: sensor,
+            deploymentId: deployment,
+          }),
+        });
 
-  // ✅ Start upload in background
-  setSaving(true);
-  setProgress(0);
-
-  try {
-    const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: localFile.name,
-        contentType: localFile.type || "application/octet-stream",
-      }),
-    });
-    const { uploadUrl, key } = await presignRes.json();
-
-    // Upload to S3
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", uploadUrl);
-      xhr.setRequestHeader("Content-Type", localFile.type);
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable && localId) {
-          const p = Math.round((e.loaded / e.total) * 100);
-          updateImage(localId, { progress: p });
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || "Failed to update metadata");
         }
-      };
-      xhr.onload = () =>
-        xhr.status < 300 ? resolve() : reject(new Error("Upload failed"));
-      xhr.onerror = () => reject(new Error("Network error"));
-      xhr.send(localFile);
-    });
 
-    // Save metadata
-    const metaRes = await fetch(`${API_URL}/api/upload/metadata`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fileId: key,
-        filename: localFile.name,
-        species,
-        plot,
-        experiencePoint: experience,
-        sensorId: sensor,
-        deploymentId: deployment,
-      }),
-    });
+        setSuccess(true);
+        onSave?.(data.item);
+      } catch (err: any) {
+        alert("Save failed: " + err.message);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
 
-    const metaData = await metaRes.json();
-    if (!metaData.success)
-      throw new Error(metaData.error || "Failed to save metadata");
+    // 🟢 UPLOAD MODE: move to sidebar and upload video + thumbnail
+if (localId) {
+  updateImage(localId, {
+    uploading: true,
+    saved: true,
+    progress: 0,
+    species,
+    plot,
+    experiencePoint: experience,
+    sensorId: sensor,
+    deploymentId: deployment,
+  });
 
-    if (localId)
-      updateImage(localId, {
-        uploading: false,
-        progress: 100,
-      });
-
-    setSuccess(true);
-    onSave?.(metaData.item);
-  } catch (err: any) {
-    alert("Save failed: " + err.message);
-    if (localId) updateImage(localId, { uploading: false });
-  } finally {
-    setSaving(false);
-    setProgress(0);
-  }
+  onSave?.({
+    species,
+    plot,
+    experiencePoint: experience,
+    sensorId: sensor,
+    deploymentId: deployment,
+  });
 }
 
+    // Reset form visually for the next video
+    setSpecies("");
+    setPlot(null);
+    setExperience(null);
+    setSensor(null);
+    setDeployment(null);
+    setSuccess(false);
 
+    setSaving(true);
+    setProgress(0);
+
+    try {
+      // 1️⃣ Generate thumbnail from the first frame
+      const ffmpeg = new FFmpeg();
+      await ffmpeg.load();
+      await ffmpeg.writeFile("input.mp4", await fetchFile(localFile));
+
+      await ffmpeg.exec([
+        "-i",
+        "input.mp4",
+        "-ss",
+        "00:00:01",
+        "-frames:v",
+        "1",
+        "-vf",
+        "scale=160:90",
+        "thumb.jpg",
+      ]);
+
+      const thumbData = await ffmpeg.readFile("thumb.jpg");
+
+      // Little TS hack: tell it this is a BlobPart
+      const thumbnailBlob = new Blob(
+        [thumbData as unknown as BlobPart],
+        { type: "image/jpeg" }
+      );
+
+      // 2️⃣ Presign VIDEO
+      const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: localFile.name,
+          contentType: localFile.type || "application/octet-stream",
+        }),
+      });
+      const { uploadUrl, key } = await presignRes.json();
+
+      // 3️⃣ Presign THUMBNAIL
+      const thumbPresignRes = await fetch(`${API_URL}/api/upload/presign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: `thumb_${localFile.name}.jpg`,
+          contentType: "image/jpeg",
+        }),
+      });
+      const {
+        uploadUrl: thumbUploadUrl,
+        key: thumbKey,
+      } = await thumbPresignRes.json();
+
+      // 4️⃣ Upload VIDEO with XHR (to keep progress in sidebar)
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadUrl);
+        xhr.setRequestHeader("Content-Type", localFile.type);
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && localId) {
+            const p = Math.round((e.loaded / e.total) * 100);
+            updateImage(localId, { progress: p });
+          }
+        };
+
+        xhr.onload = () =>
+          xhr.status < 300
+            ? resolve()
+            : reject(new Error("Upload failed"));
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(localFile);
+      });
+
+      // 5️⃣ Upload THUMBNAIL
+      await fetch(thumbUploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "image/jpeg" },
+        body: thumbnailBlob,
+      });
+
+      // 6️⃣ Save METADATA including thumbnailId
+      const metaRes = await fetch(`${API_URL}/api/upload/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId: key,
+          thumbnailId: thumbKey,
+          filename: localFile.name,
+          species,
+          plot,
+          experiencePoint: experience,
+          sensorId: sensor,
+          deploymentId: deployment,
+        }),
+      });
+
+      const metaData = await metaRes.json();
+      if (!metaData.success)
+        throw new Error(metaData.error || "Failed to save metadata");
+
+      if (localId) {
+        updateImage(localId, {
+          uploading: false,
+          progress: 100,
+        });
+      }
+
+      setSuccess(true);
+      onSave?.(metaData.item);
+    } catch (err: any) {
+      alert("Save failed: " + err.message);
+      if (localId) updateImage(localId, { uploading: false });
+    } finally {
+      setSaving(false);
+      setProgress(0);
+    }
+  }
 
   const renderOptions = (options: string[], onSelect: (val: string) => void) => (
     <div className="flex flex-wrap gap-3 justify-center">
@@ -340,7 +437,7 @@ export function MetadataForm({
               saving ? "opacity-50 cursor-wait" : "hover:bg-sky-300"
             }`}
           >
-            {saving ? "Saving..." : success ? "Updated ✅" : "Save Changes"}
+            {saving ? "Saving..." : success ? "Updated" : "Save Changes"}
           </button>
         </div>
       </div>
@@ -415,7 +512,9 @@ export function MetadataForm({
 
       {plot && experience && !sensor && (
         <>
-          <h3 className="text-lg font-semibold text-lime-400">Select Sensor</h3>
+          <h3 className="text-lg font-semibold text-lime-400">
+            Select Sensor
+          </h3>
           {renderOptions(Object.keys(data[plot][experience]), setSensor)}
         </>
       )}

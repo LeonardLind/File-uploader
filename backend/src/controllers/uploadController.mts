@@ -14,19 +14,27 @@ import { s3 } from "../aws/s3.mjs";
  */
 export async function generatePresignedUrl(req: Request, res: Response): Promise<void> {
   try {
-    const { filename, contentType } = req.body as { filename?: string; contentType?: string };
+    const { filename, contentType, type } = req.body as {
+      filename?: string;
+      contentType?: string;
+      type?: "video" | "thumbnail";
+    };
 
     if (!filename || !contentType) {
       res.status(400).json({ success: false, error: "Missing filename or contentType" });
       return;
     }
 
-    const key = `uploads/${Date.now()}_${filename}`;
+    // Decide where to store file in S3
+    const prefix = type === "thumbnail" ? "thumbnails" : "uploads";
+
+    const key = `${prefix}/${Date.now()}_${filename}`;
+
     const params = {
       Bucket: process.env.AWS_BUCKET as string,
       Key: key,
       ContentType: contentType,
-      Expires: 300, // 5 minutes
+      Expires: 300,
     };
 
     const uploadUrl = await s3.getSignedUrlPromise("putObject", params);
@@ -40,6 +48,7 @@ export async function generatePresignedUrl(req: Request, res: Response): Promise
   }
 }
 
+
 /**
  * Save metadata for an uploaded file
  */
@@ -47,12 +56,12 @@ export async function saveMetadata(req: Request, res: Response): Promise<void> {
   try {
     const {
       fileId,
+      thumbnailId,
       filename,
       species,
       plot,
       sensorId,
       deploymentId,
-      experienceId,
       experiencePoint,
     } = req.body as Record<string, any>;
 
@@ -63,12 +72,12 @@ export async function saveMetadata(req: Request, res: Response): Promise<void> {
 
     const base = {
       fileId,
+      thumbnailId,
       filename,
       species,
       plot,
       sensorId,
       deploymentId,
-      experienceId,
       experiencePoint,
       updatedAt: new Date().toISOString(),
     };

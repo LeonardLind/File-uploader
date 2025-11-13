@@ -83,43 +83,56 @@ export function StagingPage() {
     ? existingVideos.find((f) => f.fileId === selectedId)
     : images.find((img) => img.id === selectedId);
 
-  async function handleSave(savedData: any) {
-    if (!selectedImage) return;
+async function handleSave(savedData: any) {
+  if (!selectedImage) return;
 
-    if (isExistingVideo(selectedImage)) {
-      try {
-        const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileId: selectedImage.fileId,
-            ...savedData,
-          }),
-        });
-        const result = await res.json();
-        if (!result.success) throw new Error(result.error);
+  // 🟡 EDIT MODE (existing videos — unchanged)
+  if (isExistingVideo(selectedImage)) {
+    try {
+      const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId: selectedImage.fileId,
+          ...savedData,
+        }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error);
 
-        setExistingVideos((prev) =>
-          prev.map((f) =>
-            f.fileId === selectedImage.fileId ? { ...f, ...savedData } : f
-          )
-        );
-        alert(" Metadata updated successfully!");
-      } catch (err) {
-        alert(" Failed to update metadata");
-        console.error(err);
-      }
-    } else if (isPendingImage(selectedImage)) {
-      // ✅ Normal upload mode
-      updateImage(selectedImage.id, { ...savedData, saved: true });
-      const remaining = images.filter((img) => !img.saved && img.id !== selectedImage.id);
-      setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+      setExistingVideos((prev) =>
+        prev.map((f) =>
+          f.fileId === selectedImage.fileId ? { ...f, ...savedData } : f
+        )
+      );
+    } catch (err) {
+      alert(" Failed to update metadata");
+      console.error(err);
     }
+    return;
   }
+
+  // 🟢 PENDING IMAGE (upload mode)
+  if (isPendingImage(selectedImage)) {
+
+    // 🔥 1. Instantly mark as saved (moves to right sidebar)
+    updateImage(selectedImage.id, { ...savedData, saved: true });
+
+    // 🔥 2. Instantly switch to the next pending video
+    const remaining = images.filter(
+      (img) => !img.saved && img.id !== selectedImage.id
+    );
+    setSelectedId(remaining.length > 0 ? remaining[0].id : null);
+
+    // 🔥 3. Return immediately — do NOT wait for upload to finish
+    return;
+  }
+}
+
 
   async function handleDeleteCurrent(id: string) {
     if (editMode) {
-      if (!confirm("Are you sure you want to delete this video and its metadata?")) return;
+      if (!confirm("Are you sure you want to delete this video")) return;
       try {
         await fetch(`${API_URL}/api/upload/delete`, {
           method: "DELETE",
@@ -218,29 +231,30 @@ export function StagingPage() {
               </div>
 
               <MetadataForm
-                file={
-                  isExistingVideo(selectedImage)
-                    ? new File([], selectedImage.filename)
-                    : selectedImage.file
-                }
-                defaultValues={{
-                  species: selectedImage.species || "",
-                  plot: selectedImage.plot,
-                  experiencePoint: selectedImage.experiencePoint || "",
-                  sensorId: selectedImage.sensorId || "",
-                  deploymentId: selectedImage.deploymentId || "",
-                  experienceId: "",
-                }}
-                onSave={handleSave}
-                onDelete={() =>
-                  handleDeleteCurrent(
-                    isExistingVideo(selectedImage)
-                      ? selectedImage.fileId
-                      : selectedImage.id
-                  )
-                }
-                editMode={isExistingVideo(selectedImage)}
-              />
+  file={
+    isExistingVideo(selectedImage)
+      ? new File([], selectedImage.filename)
+      : selectedImage.file
+  }
+  defaultValues={{
+    species: selectedImage.species || "",
+    plot: selectedImage.plot,
+    experiencePoint: selectedImage.experiencePoint || "",
+    sensorId: selectedImage.sensorId || "",
+    deploymentId: selectedImage.deploymentId || "",
+    fileId: isExistingVideo(selectedImage) ? selectedImage.fileId : "",  // ✅ ADD THIS
+  }}
+  onSave={handleSave}
+  onDelete={() =>
+    handleDeleteCurrent(
+      isExistingVideo(selectedImage)
+        ? selectedImage.fileId
+        : selectedImage.id
+    )
+  }
+  editMode={isExistingVideo(selectedImage)}
+/>
+
             </div>
           ) : (
             <p className="text-slate-400 mt-20 text-center">
