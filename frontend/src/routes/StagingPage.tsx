@@ -1,4 +1,3 @@
-// src/pages/StagingPage.tsx
 import "../index.css";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -75,7 +74,7 @@ export function StagingPage() {
       setExistingVideos(matches);
       if (matches.length > 0) setSelectedId(matches[0].fileId);
     } catch (err) {
-      console.error("❌ Failed to load existing videos:", err);
+      console.error("Failed to load existing videos:", err);
     }
   }
 
@@ -86,7 +85,6 @@ export function StagingPage() {
 async function handleSave(savedData: any) {
   if (!selectedImage) return;
 
-  // 🟡 EDIT MODE (existing videos — unchanged)
   if (isExistingVideo(selectedImage)) {
     try {
       const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
@@ -112,19 +110,14 @@ async function handleSave(savedData: any) {
     return;
   }
 
-  // 🟢 PENDING IMAGE (upload mode)
   if (isPendingImage(selectedImage)) {
 
-    // 🔥 1. Instantly mark as saved (moves to right sidebar)
     updateImage(selectedImage.id, { ...savedData, saved: true });
 
-    // 🔥 2. Instantly switch to the next pending video
     const remaining = images.filter(
       (img) => !img.saved && img.id !== selectedImage.id
     );
     setSelectedId(remaining.length > 0 ? remaining[0].id : null);
-
-    // 🔥 3. Return immediately — do NOT wait for upload to finish
     return;
   }
 }

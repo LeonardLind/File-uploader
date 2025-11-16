@@ -26,13 +26,11 @@ export function UploadPage() {
       done: true,
     }));
 
-    // Avoid resetting state if nothing changed (prevents extra renders)
     const changed =
       next.length !== uploadedFiles.length ||
       next.some((n, i) => n.id !== uploadedFiles[i]?.id || n.name !== uploadedFiles[i]?.name);
 
     if (changed) setUploadedFiles(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unsaved]);
 
   const total = uploadedFiles.length;

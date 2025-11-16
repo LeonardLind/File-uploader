@@ -3,8 +3,6 @@ import { useImageStore } from "../state/useImageStore";
 import { VideoTrimmer } from "./VideoTrimmer";
 import editIcon from "../assets/editicon.svg";
 import deleteIcon from "../assets/deleteIcon.svg";
-
-// 🔹 NEW: for thumbnail generation
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
 
@@ -20,7 +18,7 @@ type Props = {
   };
   onSave?: (data: any) => void;
   onDelete?: () => void;
-  editMode?: boolean; // edit existing mode
+  editMode?: boolean; 
 };
 
 type OptionMap = {
@@ -155,7 +153,6 @@ export function MetadataForm({
       return;
     }
 
-    // 🟡 EDIT MODE: only update metadata (no thumbnail / no reupload)
     if (editMode) {
       try {
         setSaving(true);
@@ -189,7 +186,6 @@ export function MetadataForm({
       return;
     }
 
-    // 🟢 UPLOAD MODE: move to sidebar and upload video + thumbnail
 if (localId) {
   updateImage(localId, {
     uploading: true,
@@ -211,7 +207,6 @@ if (localId) {
   });
 }
 
-    // Reset form visually for the next video
     setSpecies("");
     setPlot(null);
     setExperience(null);
@@ -223,7 +218,6 @@ if (localId) {
     setProgress(0);
 
     try {
-      // 1️⃣ Generate thumbnail from the first frame
       const ffmpeg = new FFmpeg();
       await ffmpeg.load();
       await ffmpeg.writeFile("input.mp4", await fetchFile(localFile));
@@ -241,14 +235,11 @@ if (localId) {
       ]);
 
       const thumbData = await ffmpeg.readFile("thumb.jpg");
-
-      // Little TS hack: tell it this is a BlobPart
       const thumbnailBlob = new Blob(
         [thumbData as unknown as BlobPart],
         { type: "image/jpeg" }
       );
 
-      // 2️⃣ Presign VIDEO
       const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -259,7 +250,6 @@ if (localId) {
       });
       const { uploadUrl, key } = await presignRes.json();
 
-      // 3️⃣ Presign THUMBNAIL
       const thumbPresignRes = await fetch(`${API_URL}/api/upload/presign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -273,7 +263,6 @@ if (localId) {
         key: thumbKey,
       } = await thumbPresignRes.json();
 
-      // 4️⃣ Upload VIDEO with XHR (to keep progress in sidebar)
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("PUT", uploadUrl);
@@ -294,14 +283,12 @@ if (localId) {
         xhr.send(localFile);
       });
 
-      // 5️⃣ Upload THUMBNAIL
       await fetch(thumbUploadUrl, {
         method: "PUT",
         headers: { "Content-Type": "image/jpeg" },
         body: thumbnailBlob,
       });
 
-      // 6️⃣ Save METADATA including thumbnailId
       const metaRes = await fetch(`${API_URL}/api/upload/metadata`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -353,7 +340,6 @@ if (localId) {
     </div>
   );
 
-  // 🟡 --- EDIT MODE (Compact Layout) ---
   if (editMode) {
     return (
       <div className="w-full max-w-3xl flex flex-col gap-5 px-2 border border-slate-800 rounded-xl p-5 bg-neutral-900/60 shadow-md">
@@ -365,7 +351,6 @@ if (localId) {
           />
         )}
 
-        {/* Header Row */}
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold text-sky-400">Edit Metadata</h3>
           <div className="flex items-center gap-2">
@@ -393,8 +378,6 @@ if (localId) {
             </button>
           </div>
         </div>
-
-        {/* Editable fields */}
         <label className="text-sm text-slate-300">Species</label>
         <input
           value={species}
@@ -444,7 +427,6 @@ if (localId) {
     );
   }
 
-  // 🟢 --- NORMAL MODE (Multi-step Upload Flow) ---
   return (
     <div className="w-full max-w-3xl flex flex-col gap-6 px-2">
       {trimModal && (
@@ -455,7 +437,6 @@ if (localId) {
         />
       )}
 
-      {/* Species + Actions */}
       <div className="flex flex-col gap-2">
         <label className="text-sm text-slate-300">Species name</label>
         <div className="flex items-center gap-3">
@@ -493,7 +474,6 @@ if (localId) {
         </div>
       </div>
 
-      {/* Multi-step plot/experience/sensor/deployment selection */}
       {!plot && (
         <>
           <h3 className="text-lg font-semibold text-lime-400">Select Plot</h3>

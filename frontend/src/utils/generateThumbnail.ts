@@ -1,4 +1,3 @@
-// src/utils/generateThumbnail.ts
 export function generateThumbnail(videoUrl: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
@@ -19,7 +18,7 @@ export function generateThumbnail(videoUrl: string): Promise<string> {
     };
 
     const onLoaded = () => {
-      // Jump a tiny bit into the video to avoid black first frame if possible
+      // Jump a tiny bit into the video to avoid black first frame 
       try {
         video.currentTime = 0.1;
       } catch {

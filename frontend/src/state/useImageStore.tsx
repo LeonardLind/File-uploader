@@ -7,7 +7,6 @@ export type PendingImage = {
   saved: boolean;
   uploading?: boolean;
   progress?: number;
-  // optional metadata fields
   species?: string;
   plot?: string;
   experiencePoint?: string;

@@ -27,7 +27,7 @@ export function TopNav() {
   return (
     <header className="w-full text-white absolute top-0 left-0 z-50">
       <div className="w-full bg-[#141414]">
-        <div className="max-w-7xl mx-auto h-[6rem] flex items-center justify-between relative">
+        <div className="max-w-7xl mx-auto h-24 flex items-center justify-between relative">
           <div className="flex items-center">
             <img
               src={greenCubesLogo}

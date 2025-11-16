@@ -1,4 +1,3 @@
-// src/pages/GalleryPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -37,7 +36,6 @@ export function GalleryPage() {
   const BUCKET_NAME = import.meta.env.VITE_AWS_BUCKET;
   const navigate = useNavigate();
 
-  // 🧩 Fetch metadata
   useEffect(() => {
     async function load() {
       try {
@@ -57,7 +55,6 @@ export function GalleryPage() {
     load();
   }, [API_URL]);
 
-  // 🧠 Unique dropdown values
   const uniqueValues = useMemo(() => {
     const getUnique = (key: keyof MetadataItem) =>
       Array.from(new Set(files.map((f) => f[key]).filter(Boolean))) as string[];
@@ -70,7 +67,6 @@ export function GalleryPage() {
     };
   }, [files]);
 
-  // 🧮 Filtering logic
   useEffect(() => {
     let result = [...files];
 
@@ -105,7 +101,6 @@ export function GalleryPage() {
       updatedSort: "desc",
     });
 
-  // 🧩 Selection logic
   const toggleSelect = (id: string) =>
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -121,7 +116,6 @@ export function GalleryPage() {
     navigate(`/staging/edit?ids=${selected.join(",")}`);
   };
 
-  // 🧭 Pagination
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginatedItems = filtered.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -132,7 +126,6 @@ export function GalleryPage() {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
-  // Pagination UI helper
   const renderPageNumbers = () => {
     const pages: (number | string)[] = [];
     const maxVisible = 5;
@@ -187,7 +180,6 @@ export function GalleryPage() {
     <div className="min-h-screen w-screen bg-neutral-950 text-white flex flex-col overflow-hidden">
       <main className="flex flex-col flex-1 px-10 py-10 items-center overflow-y-auto custom-scroll">
         <div className="w-full max-w-7xl">
-          {/* Header */}
           <div className="mb-2 flex items-baseline justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-white">Gallery</h1>
@@ -213,7 +205,6 @@ export function GalleryPage() {
             </button>
           </div>
 
-          {/* Filters */}
           {!loading && files.length > 0 && (
             <div className="bg-neutral-900 border border-slate-800 rounded-lg p-4 mb-8 flex flex-wrap gap-4 items-center justify-between">
               <div className="flex flex-wrap gap-3">
@@ -243,7 +234,6 @@ export function GalleryPage() {
                   </select>
                 ))}
 
-                {/* Sort */}
                 <select
                   value={filters.updatedSort}
                   onChange={(e) =>
@@ -265,7 +255,6 @@ export function GalleryPage() {
             </div>
           )}
 
-          {/* Table */}
           {error && (
             <p className="text-red-400 mb-6 text-center">Error: {error}</p>
           )}
@@ -369,7 +358,6 @@ export function GalleryPage() {
                 </table>
               </div>
 
-              {/* Pagination controls */}
               <div className="flex items-center justify-center gap-2 mt-6">
                 <button
                   onClick={() => goToPage(currentPage - 1)}

@@ -18,15 +18,14 @@ function AppContent() {
   const location = useLocation();
   const showTopNav = location.pathname !== "/";
 
-  // Preload FFmpeg once at app startup
   useEffect(() => {
     (async () => {
       try {
-        console.log("🧩 Preloading FFmpeg...");
+        console.log("Preloading FFmpeg...");
         await getFFmpeg();
-        console.log("✅ FFmpeg ready for use");
+        console.log("FFmpeg ready for use");
       } catch (err) {
-        console.error("❌ Failed to preload FFmpeg:", err);
+        console.error("Failed to preload FFmpeg:", err);
       }
     })();
   }, []);
