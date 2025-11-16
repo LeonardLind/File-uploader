@@ -1,152 +1,118 @@
-// src/pages/StagingPage.tsx
-import "../index.css";
-import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+// src/routes/StagingPage.tsx
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+
 import { useImageStore } from "../state/useImageStore";
 import { MetadataForm } from "../components/MetadataForm";
 
-type PendingImage = {
-  id: string;
-  file: File;
-  previewUrl: string;
-  saved?: boolean;
-  species?: string;
-  plot?: string;
-  experiencePoint?: string;
-  sensorId?: string;
-  deploymentId?: string;
-  uploading?: boolean;
-  progress?: number;
-};
+import { getMetadataList } from "../app/services/api/galleryApi";
+import { deleteFile } from "../app/services/api/uploadApi";
+import { BUCKET_NAME } from "../app/services/config/env";
+import type { MetadataItem } from "../types/media";
 
-type ExistingVideo = {
-  fileId: string;
-  filename: string;
-  species?: string;
-  plot?: string;
-  experiencePoint?: string;
-  sensorId?: string;
-  deploymentId?: string;
-  previewUrl?: string;
-};
-
-function isExistingVideo(item: any): item is ExistingVideo {
-  return "fileId" in item;
-}
-
-function isPendingImage(item: any): item is PendingImage {
-  return "id" in item && "file" in item;
+/**
+ * Type guard to detect existing metadata entries (edit mode).
+ */
+function isExisting(item: any): item is MetadataItem {
+  return item && typeof item.fileId === "string";
 }
 
 export function StagingPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { images, updateImage, removeImage } = useImageStore();
 
+  const { images, removeImage } = useImageStore();
+
+  // Query parameter "ids" is used when editing existing videos from gallery
   const query = new URLSearchParams(location.search);
-  const editIds = query.get("ids")?.split(",") ?? [];
+  const editIds = (query.get("ids") || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
 
-  const [existingVideos, setExistingVideos] = useState<ExistingVideo[]>([]);
+  const [existingVideos, setExistingVideos] = useState<MetadataItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editMode, setEditMode] = useState(false);
+  const editMode = editIds.length > 0;
 
-  const uploaded = images.filter((img) => !img.saved);
-  const registered = images
-  .filter((img) => img.saved)
-  .sort((a, b) => Number(b.uploading) - Number(a.uploading));
+  // Pending (not yet registered) videos
+  const pending = useMemo(
+    () => images.filter((img) => !img.saved),
+    [images]
+  );
 
-  const API_URL = import.meta.env.VITE_API_URL;
+  // Registered videos in the right sidebar
+  const registered = useMemo(
+    () =>
+      images
+        .filter((img) => img.saved)
+        .sort((a, b) => Number(b.uploading) - Number(a.uploading)),
+    [images]
+  );
 
+  /**
+   * Load existing metadata entries when in edit mode.
+   */
   useEffect(() => {
-    if (editIds.length > 0) {
-      setEditMode(true);
-      fetchExistingVideos();
-    } else if (uploaded.length > 0 && !selectedId) {
-      setSelectedId(uploaded[0].id);
+    if (!editMode) return;
+
+    async function loadExisting() {
+      try {
+        const all = await getMetadataList();
+        const matches = all.filter((item) => editIds.includes(item.fileId));
+        setExistingVideos(matches);
+        if (matches.length > 0) {
+          setSelectedId(matches[0].fileId);
+        }
+      } catch (err) {
+        console.error("Failed to load existing videos:", err);
+      }
     }
-  }, [editIds]);
 
-  async function fetchExistingVideos() {
-    try {
-      const res = await fetch(`${API_URL}/api/upload/metadata`);
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-      const matches = data.items.filter((f: any) => editIds.includes(f.fileId));
-      setExistingVideos(matches);
-      if (matches.length > 0) setSelectedId(matches[0].fileId);
-    } catch (err) {
-      console.error("❌ Failed to load existing videos:", err);
+    loadExisting();
+  }, [editMode, editIds]);
+
+  /**
+   * When not in edit mode, ensure there is a selected pending item.
+   */
+  useEffect(() => {
+    if (editMode) return;
+    if (!selectedId && pending.length > 0) {
+      setSelectedId(pending[0].id);
     }
-  }
+  }, [editMode, pending, selectedId]);
 
-  const selectedImage: PendingImage | ExistingVideo | undefined = editMode
-    ? existingVideos.find((f) => f.fileId === selectedId)
-    : images.find((img) => img.id === selectedId);
-
-async function handleSave(savedData: any) {
-  if (!selectedImage) return;
-
-  // 🟡 EDIT MODE (existing videos — unchanged)
-  if (isExistingVideo(selectedImage)) {
-    try {
-      const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: selectedImage.fileId,
-          ...savedData,
-        }),
-      });
-      const result = await res.json();
-      if (!result.success) throw new Error(result.error);
-
-      setExistingVideos((prev) =>
-        prev.map((f) =>
-          f.fileId === selectedImage.fileId ? { ...f, ...savedData } : f
-        )
-      );
-    } catch (err) {
-      alert(" Failed to update metadata");
-      console.error(err);
+  const selectedItem = useMemo(() => {
+    if (!selectedId) return undefined;
+    if (editMode) {
+      return existingVideos.find((v) => v.fileId === selectedId);
     }
-    return;
-  }
+    return images.find((img) => img.id === selectedId);
+  }, [selectedId, editMode, existingVideos, images]);
 
-  // 🟢 PENDING IMAGE (upload mode)
-  if (isPendingImage(selectedImage)) {
-
-    // 🔥 1. Instantly mark as saved (moves to right sidebar)
-    updateImage(selectedImage.id, { ...savedData, saved: true });
-
-    // 🔥 2. Instantly switch to the next pending video
-    const remaining = images.filter(
-      (img) => !img.saved && img.id !== selectedImage.id
-    );
-    setSelectedId(remaining.length > 0 ? remaining[0].id : null);
-
-    // 🔥 3. Return immediately — do NOT wait for upload to finish
-    return;
-  }
-}
-
-
+  /**
+   * Deletes the currently selected item.
+   * - Edit mode: remove from backend and local list.
+   * - Upload mode: remove from local pending list only.
+   */
   async function handleDeleteCurrent(id: string) {
     if (editMode) {
-      if (!confirm("Are you sure you want to delete this video")) return;
+      const confirmed = window.confirm("Are you sure you want to delete this video?");
+      if (!confirmed) return;
+
       try {
-        await fetch(`${API_URL}/api/upload/delete`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileId: id }),
-        });
+        await deleteFile(id);
         setExistingVideos((prev) => prev.filter((v) => v.fileId !== id));
-        setSelectedId(null);
-      } catch {
-        alert("❌ Failed to delete file");
+        setSelectedId(() => {
+          const remaining = existingVideos.filter((v) => v.fileId !== id);
+          return remaining.length > 0 ? remaining[0].fileId : null;
+        });
+      } catch (err) {
+        alert("Failed to delete file");
+        console.error(err);
       }
     } else {
       removeImage(id);
-      const remaining = images.filter((img) => !img.saved && img.id !== id);
+      const remaining = pending.filter((img) => img.id !== id);
       setSelectedId(remaining.length > 0 ? remaining[0].id : null);
     }
   }
@@ -162,108 +128,133 @@ async function handleSave(savedData: any) {
         <aside className="flex flex-col w-[20rem] h-full bg-neutral-950 border-r border-slate-800 overflow-hidden">
           <div className="p-5 border-b border-slate-800 shrink-0">
             <h3 className="uppercase text-lg text-white">
-              {editMode ? "Editing Existing" : "Pending Review"}
+              {editMode ? "Editing existing" : "Pending review"}
             </h3>
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-4 custom-scroll">
             <div className="flex flex-col items-center gap-3">
-              {(editMode ? existingVideos : uploaded).length === 0 && (
+              {(editMode ? existingVideos : pending).length === 0 && (
                 <p className="text-slate-500 text-xs text-center">No files</p>
               )}
 
-              {(editMode ? existingVideos : uploaded).map((vid) => (
-                <button
-                  key={isExistingVideo(vid) ? vid.fileId : vid.id}
-                  onClick={() =>
-                    setSelectedId(isExistingVideo(vid) ? vid.fileId : vid.id)
-                  }
-                  className={`relative overflow-hidden rounded-md border transition-all w-[18rem] h-40 ${
-                    selectedId === (isExistingVideo(vid) ? vid.fileId : vid.id)
-                      ? "border-lime-400 bg-white/10"
-                      : "border-transparent hover:scale-[1.02] hover:border-slate-600"
-                  }`}
-                >
-                  <video
-                    src={
-                      isExistingVideo(vid)
-                        ? vid.previewUrl ||
-                          `https://${import.meta.env.VITE_AWS_BUCKET}.s3.amazonaws.com/${vid.fileId}`
-                        : vid.previewUrl
-                    }
-                    controls={false}
-                    className="w-full h-full object-cover rounded-md"
-                  />
-                  {isExistingVideo(vid) && (
-                    <div className="absolute top-1 right-1 bg-yellow-400 text-black text-xs font-bold px-2 py-0.5 rounded">
-                      Edit
-                    </div>
-                  )}
-                </button>
-              ))}
+              {(editMode ? existingVideos : pending).map((item) => {
+                const key = isExisting(item) ? item.fileId : item.id;
+                const active = selectedId === key;
+
+                const videoSrc = isExisting(item)
+                  ? item.thumbnailId && BUCKET_NAME
+                    ? `https://${BUCKET_NAME}.s3.amazonaws.com/${item.thumbnailId}`
+                    : BUCKET_NAME
+                    ? `https://${BUCKET_NAME}.s3.amazonaws.com/${item.fileId}`
+                    : ""
+                  : item.previewUrl;
+
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedId(key)}
+                    className={`relative overflow-hidden rounded-md border transition-all w-[18rem] h-40 ${
+                      active
+                        ? "border-lime-400 bg-white/10"
+                        : "border-transparent hover:scale-[1.02] hover:border-slate-600"
+                    }`}
+                  >
+                    {videoSrc ? (
+                      <video
+                        src={videoSrc}
+                        controls={false}
+                        className="w-full h-full object-cover rounded-md"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-neutral-800" />
+                    )}
+
+                    {isExisting(item) && (
+                      <div className="absolute top-1 right-1 bg-yellow-400 text-black text-xs font-bold px-2 py-0.5 rounded">
+                        Edit
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div className="p-5 border-t border-slate-800 flex justify-center items-center shrink-0">
-            <span className="text-m text-slate-400">
+            <span className="text-sm text-slate-400">
               {editMode
                 ? `${existingVideos.length} videos to edit`
-                : `${uploaded.length} pending`}
+                : `${pending.length} pending`}
             </span>
           </div>
         </aside>
 
         {/* CENTER FORM */}
         <section className="flex-1 flex flex-col items-center overflow-y-auto py-10 px-8 custom-scroll">
-          {selectedImage ? (
+          {selectedItem ? (
             <div className="flex flex-col items-center w-full">
+              {/* Video preview */}
               <div className="bg-black rounded-md p-4 mb-10 shadow-md max-w-3xl w-full flex justify-center relative">
-                <video
-                  src={
-                    isExistingVideo(selectedImage)
-                      ? selectedImage.previewUrl ||
-                        `https://${import.meta.env.VITE_AWS_BUCKET}.s3.amazonaws.com/${selectedImage.fileId}`
-                      : selectedImage.previewUrl
-                  }
-                  controls
-                  className="rounded-md max-h-[400px] object-contain"
-                />
+                {isExisting(selectedItem) ? (
+                  <video
+                    src={
+                      BUCKET_NAME
+                        ? `https://${BUCKET_NAME}.s3.amazonaws.com/${selectedItem.fileId}`
+                        : ""
+                    }
+                    controls
+                    className="rounded-md max-h-[400px] object-contain"
+                  />
+                ) : (
+                  <video
+                    src={selectedItem.previewUrl}
+                    controls
+                    className="rounded-md max-h-[400px] object-contain"
+                  />
+                )}
               </div>
 
+              {/* Metadata form */}
               <MetadataForm
-  file={
-    isExistingVideo(selectedImage)
-      ? new File([], selectedImage.filename)
-      : selectedImage.file
-  }
-  defaultValues={{
-    species: selectedImage.species || "",
-    plot: selectedImage.plot,
-    experiencePoint: selectedImage.experiencePoint || "",
-    sensorId: selectedImage.sensorId || "",
-    deploymentId: selectedImage.deploymentId || "",
-    fileId: isExistingVideo(selectedImage) ? selectedImage.fileId : "",  // ✅ ADD THIS
-  }}
-  onSave={handleSave}
-  onDelete={() =>
-    handleDeleteCurrent(
-      isExistingVideo(selectedImage)
-        ? selectedImage.fileId
-        : selectedImage.id
-    )
-  }
-  editMode={isExistingVideo(selectedImage)}
-/>
-
+                file={
+                  isExisting(selectedItem)
+                    ? new File([], selectedItem.filename)
+                    : selectedItem.file
+                }
+                defaultValues={{
+                  species: selectedItem.species || "",
+                  plot: selectedItem.plot,
+                  experiencePoint: selectedItem.experiencePoint || "",
+                  sensorId: selectedItem.sensorId || "",
+                  deploymentId: selectedItem.deploymentId || "",
+                  fileId: isExisting(selectedItem) ? selectedItem.fileId : undefined,
+                }}
+                editMode={isExisting(selectedItem)}
+                onSave={(updated) => {
+                  if (isExisting(selectedItem)) {
+                    setExistingVideos((prev) =>
+                      prev.map((item) =>
+                        item.fileId === updated.fileId ? updated : item
+                      )
+                    );
+                  }
+                }}
+                onDelete={() =>
+                  handleDeleteCurrent(
+                    isExisting(selectedItem) ? selectedItem.fileId : selectedItem.id
+                  )
+                }
+              />
             </div>
           ) : (
             <p className="text-slate-400 mt-20 text-center">
-              Select a file to begin {editMode ? "editing" : "adding"} metadata
+              Select a file to begin {editMode ? "editing" : "adding"} metadata.
             </p>
           )}
         </section>
 
-        {/* RIGHT SIDEBAR */}
+        {/* RIGHT SIDEBAR (registered uploads) */}
         {!editMode && (
           <aside className="flex flex-col w-[20rem] h-full bg-neutral-950 border-l border-slate-800 overflow-hidden">
             <div className="p-5 border-b border-slate-800 shrink-0">

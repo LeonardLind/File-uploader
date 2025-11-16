@@ -1,8 +1,24 @@
-import type { PendingImage } from "../types";
+// src/components/upload/ImagePreviewCard.tsx
+import type { PendingImage } from "../../types/media";
 
-export function ImagePreviewCard({ image }: { image: PendingImage & { animalLabel?: string } }) {
+type ImagePreviewCardProps = {
+  image: PendingImage & { animalLabel?: string };
+  onRemove: () => void;
+};
+
+export function ImagePreviewCard({ image, onRemove }: ImagePreviewCardProps) {
   return (
-    <div className="flex flex-col items-center gap-2 w-full">
+    <div className="relative flex flex-col items-center gap-2 w-full">
+
+      {/* Remove button */}
+      <button
+        onClick={onRemove}
+        title="Remove"
+        className="absolute top-2 right-2 bg-black/60 text-red-400 hover:text-red-200 hover:bg-black/80 rounded-full w-7 h-7 flex items-center justify-center transition"
+      >
+        ✕
+      </button>
+
       <div className="w-full h-40 bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center border border-slate-800 shadow-md">
         {image.previewUrl ? (
           <img

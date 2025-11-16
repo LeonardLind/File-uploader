@@ -1,238 +1,82 @@
-import {
-  PutCommand,
-  GetCommand,
-  ScanCommand,
-  DeleteCommand,
-  UpdateCommand,
-} from "@aws-sdk/lib-dynamodb";
+// controller/uploadController.mts
+
 import type { Request, Response } from "express";
-import { ddb, TABLE_NAME } from "../aws/dynamo.mjs";
-import { s3 } from "../aws/s3.mjs";
 
-/**
- * Generate a pre-signed S3 upload URL
- */
-export async function generatePresignedUrl(req: Request, res: Response): Promise<void> {
+import { presignUpload } from "../services/s3Service.mjs";
+import {
+  saveMetadata,
+  deleteMetadata,
+  getAllMetadata,
+  toDynamo,
+  buildMetadataEntry,
+} from "../services/uploadService.mjs";
+import { success, failure } from "../utils/response.mjs";
+
+
+// -----------------------------
+// PRESIGN UPLOAD
+// -----------------------------
+export async function presignUploadController(req: Request, res: Response) {
   try {
-    const { filename, contentType, type } = req.body as {
-      filename?: string;
-      contentType?: string;
-      type?: "video" | "thumbnail";
-    };
+    const { filename, contentType } = req.body;
 
-    if (!filename || !contentType) {
-      res.status(400).json({ success: false, error: "Missing filename or contentType" });
-      return;
-    }
+    const key = `${Date.now()}_${filename}`;
+    const url = await presignUpload(key, contentType);
 
-    // Decide where to store file in S3
-    const prefix = type === "thumbnail" ? "thumbnails" : "uploads";
+    return res.json(success("Presigned URL generated", { uploadUrl: url, key }));
+  } catch (err) {
+    const { status, payload } = failure("Failed to presign upload", err, 400);
+    return res.status(status).json(payload);
+    
+  }
+  
+}
 
-    const key = `${prefix}/${Date.now()}_${filename}`;
 
-    const params = {
-      Bucket: process.env.AWS_BUCKET as string,
-      Key: key,
-      ContentType: contentType,
-      Expires: 300,
-    };
+// -----------------------------
+// CREATE METADATA
+// -----------------------------
+export async function createMetadataController(req: Request, res: Response) {
+  try {
+    const entry = buildMetadataEntry(req.body);
+    await saveMetadata(toDynamo(entry));
 
-    const uploadUrl = await s3.getSignedUrlPromise("putObject", params);
-    res.json({ success: true, uploadUrl, key });
-  } catch (err: unknown) {
-    console.error("❌ Error generating presigned URL:", err);
-    res.status(500).json({
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to generate presigned URL",
-    });
+    return res.json(success("Metadata saved", entry));
+  } catch (err) {
+    const { status, payload } = failure("Failed to save metadata", err, 500);
+    return res.status(status).json(payload);
   }
 }
 
 
-/**
- * Save metadata for an uploaded file
- */
-export async function saveMetadata(req: Request, res: Response): Promise<void> {
+// -----------------------------
+// DELETE FILE METADATA
+// -----------------------------
+export async function deleteFileController(req: Request, res: Response) {
   try {
-    const {
-      fileId,
-      thumbnailId,
-      filename,
-      species,
-      plot,
-      sensorId,
-      deploymentId,
-      experiencePoint,
-    } = req.body as Record<string, any>;
+    const fileId = req.params.fileId as string;
 
-    if (!fileId) {
-      res.status(400).json({ success: false, error: "fileId is required" });
-      return;
-    }
+    await deleteMetadata(fileId);
 
-    const base = {
-      fileId,
-      thumbnailId,
-      filename,
-      species,
-      plot,
-      sensorId,
-      deploymentId,
-      experiencePoint,
-      updatedAt: new Date().toISOString(),
-    };
-
-    const item: Record<string, any> = {};
-    for (const [key, value] of Object.entries(base)) {
-      if (value !== undefined && value !== null && value !== "") {
-        item[key] = value;
-      }
-    }
-
-    await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
-    res.json({ success: true, item });
-  } catch (err: unknown) {
-    console.error("❌ Error saving metadata:", err);
-    res.status(500).json({
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to save metadata",
-    });
+    return res.json(success("Deleted", { fileId }));
+  } catch (err) {
+    const { status, payload } = failure("Failed to delete", err, 500);
+    return res.status(status).json(payload);
   }
 }
 
-/**
- * Get ALL metadata entries
- */
-export async function getAllMetadata(_req: Request, res: Response): Promise<void> {
+
+// -----------------------------
+// LIST ALL METADATA
+// -----------------------------
+export async function listMetadataController(req: Request, res: Response) {
   try {
-    const data = await ddb.send(new ScanCommand({ TableName: TABLE_NAME }));
-    res.json({ success: true, items: data.Items || [] });
-  } catch (err: unknown) {
-    console.error("❌ Error fetching metadata:", err);
-    res.status(500).json({
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to fetch metadata",
-    });
+    const items = await getAllMetadata();
+    return res.json(success("Fetched metadata", items));
+    } catch (err) {
+    console.error("🔥 ERROR in listMetadataController:", err);
+    const { status, payload } = failure("Failed to fetch metadata", err, 500);
+    return res.status(status).json(payload);
   }
-}
 
-/**
- * Get metadata for a single file
- */
-export async function getMetadata(req: Request, res: Response): Promise<void> {
-  try {
-    const { fileId } = req.params;
-    if (!fileId) {
-      res.status(400).json({ success: false, error: "Missing fileId" });
-      return;
-    }
-
-    const data = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: { fileId } }));
-
-    if (!data.Item) {
-      res.status(404).json({ success: false, error: "Not found" });
-      return;
-    }
-
-    res.json({ success: true, item: data.Item });
-  } catch (err: unknown) {
-    console.error("❌ Error getting metadata:", err);
-    res.status(500).json({
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to get metadata",
-    });
-  }
-}
-
-/**
- * 🆕 Update metadata for an existing file
- */
-export async function updateMetadata(req: Request, res: Response): Promise<void> {
-  try {
-    const { fileId, species, plot, experiencePoint, sensorId, deploymentId } =
-      req.body as Record<string, any>;
-
-    if (!fileId) {
-      res.status(400).json({ success: false, error: "fileId is required" });
-      return;
-    }
-
-    const fields = {
-      species,
-      plot,
-      experiencePoint,
-      sensorId,
-      deploymentId,
-      updatedAt: new Date().toISOString(),
-    };
-
-    const expressionParts: string[] = [];
-    const names: Record<string, string> = {};
-    const values: Record<string, unknown> = {};
-
-    for (const [key, value] of Object.entries(fields)) {
-      if (value !== undefined) {
-        expressionParts.push(`#${key} = :${key}`);
-        names[`#${key}`] = key;
-        values[`:${key}`] = value;
-      }
-    }
-
-    if (expressionParts.length === 0) {
-      res.status(400).json({ success: false, error: "No fields to update" });
-      return;
-    }
-
-    const result = await ddb.send(
-      new UpdateCommand({
-        TableName: TABLE_NAME,
-        Key: { fileId },
-        UpdateExpression: "SET " + expressionParts.join(", "),
-        ExpressionAttributeNames: names,
-        ExpressionAttributeValues: values,
-        ReturnValues: "ALL_NEW",
-      })
-    );
-
-    res.json({ success: true, item: result.Attributes });
-  } catch (err: unknown) {
-    console.error("❌ Error updating metadata:", err);
-    res.status(500).json({
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to update metadata",
-    });
-  }
-}
-
-/**
- * 🆕 Delete S3 file and metadata record
- */
-export async function deleteFileAndMetadata(req: Request, res: Response): Promise<void> {
-  try {
-    const { fileId } = req.body as { fileId?: string };
-
-    if (!fileId) {
-      res.status(400).json({ success: false, error: "Missing fileId" });
-      return;
-    }
-
-    // Delete from DynamoDB
-    await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { fileId } }));
-
-    // Delete from S3 — note: .deleteObject now returns a promise via .promise()
-    await s3
-      .deleteObject({
-        Bucket: process.env.AWS_BUCKET as string,
-        Key: fileId,
-      })
-      .promise();
-
-    res.json({ success: true, message: "File and metadata deleted" });
-  } catch (err: unknown) {
-    console.error("❌ Error deleting file and metadata:", err);
-    res.status(500).json({
-      success: false,
-      error: err instanceof Error ? err.message : "Failed to delete file and metadata",
-    });
-  }
 }

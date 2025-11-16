@@ -1,27 +1,16 @@
-import express from "express";
+// routes/uploadRoutes.mts
+import { Router } from "express";
+
 import {
-  generatePresignedUrl,
-  saveMetadata,
-  getAllMetadata,
-  getMetadata,
-  updateMetadata, // 🆕 new controller
-  deleteFileAndMetadata, // 🆕 new controller
+  presignUploadController,
+  createMetadataController,
+  deleteFileController,
+  listMetadataController,
 } from "../controllers/uploadController.mjs";
 
-const router = express.Router();
+export const uploadRoutes = Router();
 
-// Generate pre-signed S3 URL for direct uploads
-router.post("/presign", generatePresignedUrl);
-
-// Metadata endpoints
-router.post("/metadata", saveMetadata);
-router.get("/metadata", getAllMetadata);
-router.get("/metadata/:fileId", getMetadata);
-
-// 🆕 Update metadata
-router.put("/metadata/update", updateMetadata);
-
-// 🆕 Delete metadata + S3 file
-router.delete("/delete", deleteFileAndMetadata);
-
-export default router;
+uploadRoutes.post("/presign", presignUploadController);
+uploadRoutes.post("/metadata", createMetadataController);
+uploadRoutes.get("/metadata", listMetadataController);
+uploadRoutes.delete("/delete/:fileId", deleteFileController);

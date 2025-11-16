@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useImageStore } from "../state/useImageStore";
-import { FileDropzone } from "../components/FileDropzone";
+import { FileDropzone } from "../components/upload/FileDropzone";
 import backgroundImage from "../assets/forst.png";
 
 export function UploadPage() {
