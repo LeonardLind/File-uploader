@@ -112,7 +112,7 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
     [addFiles]
   );
 
-  // 📂 Handle file drop
+  // file drop
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
       if (!acceptedFiles.length) return;

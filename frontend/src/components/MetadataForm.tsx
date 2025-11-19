@@ -40,7 +40,6 @@ export function MetadataForm({
   onDelete,
   editMode = false,
 }: MetadataFormProps) {
-  // State (strings, empty = not selected)
   const [species, setSpecies] = useState<string>(defaultValues.species ?? "");
   const [plot, setPlot] = useState<string>(defaultValues.plot ?? "");
   const [experience, setExperience] = useState<string>(
@@ -71,9 +70,6 @@ export function MetadataForm({
   const baseOptionBtnBlue =
     "px-4 py-2 rounded-lg bg-white/5 border border-blue-400/30 text-gray-200 hover:border-blue-300 hover:text-blue-300 transition";
 
-  // =============================
-  // Upload Pipeline
-  // =============================
   async function uploadVideoAndMetadata() {
     if (!localId) return;
     try {
@@ -95,7 +91,6 @@ export function MetadataForm({
       ]);
 
       const thumbBuf = await ffmpeg.readFile("thumb.jpg");
-      // Explicit cast so TS stops complaining about FileData vs BlobPart
       const thumbBlob = new Blob(
         [thumbBuf as unknown as BlobPart],
         { type: "image/jpeg" }
@@ -178,9 +173,7 @@ export function MetadataForm({
     }
   }
 
-  // =============================
   // Save handler
-  // =============================
   async function handleSaveClick() {
     if (!plot || !experience || !sensor || !deployment) return;
 
@@ -235,9 +228,7 @@ export function MetadataForm({
     setDeployment("");
   }
 
-  // =============================
   // Option renderer
-  // =============================
   const renderOptions = (
     opts: string[],
     select: (v: string) => void,
@@ -256,9 +247,7 @@ export function MetadataForm({
     </div>
   );
 
-  // =============================
-  // EDIT MODE (blue theme)
-  // =============================
+  // EDIT MODE 
   if (editMode) {
     return (
       <div className="w-full max-w-2xl mx-auto flex flex-col gap-6 p-4 bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl shadow-lg">
@@ -337,9 +326,7 @@ export function MetadataForm({
     );
   }
 
-  // =============================
-  // NEW UPLOAD (lime theme)
-  // =============================
+  // NEW UPLOAD 
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-5 p-4">
       {trimModal && (
@@ -378,7 +365,7 @@ export function MetadataForm({
           </div>
         </div>
 
-        {/* Step 1: Plot */}
+        {/*Plot */}
         {!plot && (
           <>
             <h3 className="text-lg text-lime-400">Select Plot</h3>
@@ -386,7 +373,7 @@ export function MetadataForm({
           </>
         )}
 
-        {/* Step 2: Experience */}
+        {/*Experience */}
         {plot && !experience && metadataMap[plot] && (
           <>
             <h3 className="text-lg text-lime-400">Select Experience Point</h3>
@@ -394,7 +381,7 @@ export function MetadataForm({
           </>
         )}
 
-        {/* Step 3: Sensor */}
+        {/*Sensor */}
         {plot && experience && !sensor && metadataMap[plot]?.[experience] && (
           <>
             <h3 className="text-lg text-lime-400">Select Sensor</h3>
@@ -405,7 +392,7 @@ export function MetadataForm({
           </>
         )}
 
-        {/* Step 4: Deployment */}
+        {/*Deployment */}
         {plot &&
           experience &&
           sensor &&
@@ -431,7 +418,7 @@ export function MetadataForm({
             </>
           )}
 
-        {/* Final Save */}
+        {/*Upload */}
         {plot && experience && sensor && deployment && (
           <div className="flex justify-end">
             <button

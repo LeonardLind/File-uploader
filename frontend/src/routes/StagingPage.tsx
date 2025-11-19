@@ -39,10 +39,6 @@ function isPendingImage(item: PendingImage | ExistingVideo): item is PendingImag
   return "id" in item && "file" in item;
 }
 
-/* ─────────────────────────────────────────────── */
-/* Thumbnail (desktop, simple breakpoints)         */
-/* ─────────────────────────────────────────────── */
-
 const Thumbnail = React.memo(function Thumbnail({
   src,
   highlight,
@@ -64,9 +60,6 @@ const Thumbnail = React.memo(function Thumbnail({
   );
 });
 
-/* ─────────────────────────────────────────────── */
-/* Main Component                                  */
-/* ─────────────────────────────────────────────── */
 
 export function StagingPage() {
   const navigate = useNavigate();
@@ -117,7 +110,7 @@ export function StagingPage() {
     load();
   }, [editIds, existingVideos.length, API_URL]);
 
-  /* AUTO SELECT FIRST PENDING (upload mode) */
+  /* AUTO SELECT FIRST PENDING */
   useEffect(() => {
     if (!editMode && uploaded.length > 0 && !selectedId) {
       setSelectedId(uploaded[0].id);
@@ -128,7 +121,6 @@ export function StagingPage() {
     ? existingVideos.find((f) => f.fileId === selectedId)
     : images.find((img) => img.id === selectedId);
 
-  /* SAVE HANDLER */
   async function handleSave(savedData: any) {
     if (!selectedImage) return;
 
@@ -168,7 +160,6 @@ export function StagingPage() {
     }
   }
 
-  /* DELETE HANDLER */
   async function handleDeleteCurrent(id: string) {
     if (editMode) {
       if (!confirm("Delete this video?")) return;
@@ -201,15 +192,12 @@ export function StagingPage() {
   const canShowLeft = editMode ? existingVideos.length > 0 : uploaded.length > 0;
   const canShowRight = !editMode && registered.length > 0;
 
-  /* ─────────────────────────────────────────────── */
-  /* RENDER                                         */
-  /* ─────────────────────────────────────────────── */
 
   return (
     <div className="flex flex-col w-full h-full bg-[#0f0f10] text-white overflow-hidden">
       <main className="relative flex-1 h-full flex flex-row">
-        {/* LEFT SIDEBAR (Pending / Editing) */}
-        <aside className="w-52 md:w-60 lg:w-64 h-full bg-[#1a1b1e] border-r border-[#2a2b2e] flex flex-col">
+        {/* LEFT SIDEBAR  */}
+        <aside className="w-52 md:w-50 lg:w-64 h-full bg-[#1a1b1e] border-r border-[#2a2b2e] flex flex-col">
   <div className="p-4 border-b border-[#2a2b2e] bg-[#1a1b1e]">
     <h3 className="text-sm font-semibold text-gray-300 tracking-wide">
       {editMode ? "Editing" : "Pending"}
@@ -265,7 +253,6 @@ export function StagingPage() {
         <section className="flex-1 flex flex-col items-center overflow-y-auto py-15 px-4 md:px-6 lg:px-8 custom-scroll bg-[#0f0f10]">
           {selectedImage ? (
             <div className="flex flex-col items-center w-full max-w-3xl gap-6">
-              {/* VIDEO PREVIEW CARD */}
               <div className="rounded-lg border border-[#2a2b2e] w-full overflow-hidden max-w-3xl bg-black">
                 <video
                   src={
@@ -315,9 +302,9 @@ export function StagingPage() {
           )}
         </section>
 
-        {/* RIGHT SIDEBAR (Registered) */}
+        {/* RIGHT SIDEBAR */}
         {!editMode && (
-          <aside className="w-52 md:w-60 lg:w-64 h-full bg-[#1a1b1e] border-r border-[#2a2b2e] flex flex-col">
+          <aside className="w-52 md:w-52 lg:w-64 h-full bg-[#1a1b1e] border-r border-[#2a2b2e] flex flex-col">
             <div className="p-4 border-b border-[#2a2b2e] bg-[#1a1b1e]">
               <h3 className="uppercase text-sm font-semibold text-gray-300 tracking-wide">
                 Registered
