@@ -7,99 +7,73 @@ export function TopNav() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const getCurrentPage = () => {
-    if (location.pathname.startsWith("/gallery")) return "File Manager";
-    if (location.pathname.startsWith("/staging")) return "Register";
-    if (location.pathname.startsWith("/login")) return "Login";
-    return "Uploader";
-  };
+  const currentPage =
+    location.pathname.startsWith("/gallery")
+      ? "File Manager"
+      : location.pathname.startsWith("/staging")
+      ? "Register"
+      : "Uploader";
 
-  const currentPage = getCurrentPage();
-
-  const getActiveIndex = () => {
-    if (location.pathname.startsWith("/upload")) return 0;
-    if (location.pathname.startsWith("/staging")) return 1;
-    if (location.pathname.startsWith("/gallery")) return 2;
-    return 0;
-  };
-  const activeIndex = getActiveIndex();
+  const activeIndex = location.pathname.startsWith("/staging")
+    ? 1
+    : location.pathname.startsWith("/gallery")
+    ? 2
+    : 0;
 
   return (
-    <header className="w-full text-white absolute top-0 left-0 z-50">
-      <div className="w-full bg-[#141414]">
-        <div className="max-w-7xl mx-auto h-24 flex items-center justify-between relative">
-          <div className="flex items-center">
-            <img
-              src={greenCubesLogo}
-              alt="Green Cubes Logo"
-              className="h-10 object-contain"
-            />
-          </div>
+    <header className="fixed top-0 left-0 w-full z-50 text-white">
+      {/* TOP BAR */}
+      <div className="bg-[#0f0f10] ">
+        <div className="max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 h-20">
+          
+          {/* LEFT LOGO */}
+          <img src={greenCubesLogo} alt="Green Cubes Logo" className="h-8 sm:h-9 lg:h-10" />
 
-          <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-3 whitespace-nowrap text-left">
-            <img src={valeLogo} alt="Vale Logo" className="h-9 object-contain" />
-            <span className="text-sm text-white/80">
-              Vale / Brazil / Minas Águas Claras /{" "}
-              <strong className="text-white font-semibold">{currentPage}</strong>
+          {/* CENTER TITLE */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <img src={valeLogo} alt="Vale Logo" className="h-7 sm:h-8 lg:h-9 object-contain" />
+            <span className="text-xs sm:text-sm lg:text-base text-white/80 whitespace-nowrap">
+              Vale / Brazil / Minas Águas Claras /
+              <strong className="text-white ml-1">{currentPage}</strong>
             </span>
           </div>
 
-          <div className="flex items-center gap-1 text-slate-300 text-base">
-            <span className="pt-1">Vale</span>
-            <img
-              src={userIcon}
-              alt="User Icon"
-              className="h-12 w-12 object-contain"
-            />
+          {/* RIGHT USER */}
+          <div className="flex items-center gap-2 sm:gap-3 text-slate-300">
+            <span className="text-xs sm:text-sm lg:text-base">Vale</span>
+            <img src={userIcon} alt="User Icon" className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12" />
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto flex justify-end pt-3 text-m font-medium tracking-wide bg-transparent relative">
-        <div className="flex flex-col items-center justify-center">
-          <nav className="flex items-center justify-center gap-10 mb-0.5">
+      {/* BOTTOM NAV */}
+      <div className="bg-transparent flex flex-col items-center pt-3">
+        
+        {/* NAV LINKS */}
+        <nav className="flex gap-6 sm:gap-8 lg:gap-10 text-xs sm:text-sm lg:text-xl">
+          {[
+            { label: "Uploader", path: "/upload", i: 0 },
+            { label: "Register", path: "/staging/sample", i: 1 },
+            { label: "File Manager", path: "/gallery", i: 2 },
+          ].map(({ label, path, i }) => (
             <span
-              onClick={() => navigate("/upload")}
+              key={label}
+              onClick={() => navigate(path)}
               className={`uppercase cursor-pointer transition ${
-                activeIndex === 0
-                  ? "text-lime-500"
-                  : "text-slate-300 hover:text-white"
+                activeIndex === i ? "text-lime-500" : "text-slate-300 hover:text-white"
               }`}
             >
-              Uploader
+              {label}
             </span>
+          ))}
+        </nav>
 
-            <span
-              onClick={() => navigate("/staging/sample")}
-              className={`uppercase cursor-pointer transition ${
-                activeIndex === 1
-                  ? "text-lime-500"
-                  : "text-slate-300 hover:text-white"
-              }`}
-            >
-              Register
-            </span>
-
-            <span
-              onClick={() => navigate("/gallery")}
-              className={`uppercase cursor-pointer transition ${
-                activeIndex === 2
-                  ? "text-lime-500"
-                  : "text-slate-300 hover:text-white"
-              }`}
-            >
-              File Manager
-            </span>
-          </nav>
-          <div className="relative w-[355px] h-[3px] bg-slate-700 rounded-full overflow-hidden">
-            <div
-              className="absolute top-0 left-0 h-full bg-lime-500 transition-all duration-300"
-              style={{
-                width: "33.333333333%",
-                transform: `translateX(${activeIndex * 100}%)`,
-              }}
-            />
-          </div>
+        {/* UNDERLINE BAR (transparent background) */}
+        <div className="relative w-[300px] sm:w-[330px] lg:w-[440px] h-[3px] bg-slate-700 mt-1 rounded-full overflow-hidden">
+          <div
+            className="absolute top-0 left-0 h-full bg-lime-500 transition-transform duration-300"
+            style={{ width: "33.333%", transform: `translateX(${activeIndex * 100}%)` }}
+          />
         </div>
       </div>
     </header>

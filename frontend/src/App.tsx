@@ -35,7 +35,7 @@ function AppContent() {
       {showTopNav && <TopNav />}
       <main
         className={`flex-1 flex justify-center items-start overflow-hidden bg-neutral-950 ${
-          showTopNav ? "pt-24" : "pt-0"
+          showTopNav ? "pt-20" : "pt-0"
         }`}
       >
         <Routes>

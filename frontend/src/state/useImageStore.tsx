@@ -1,9 +1,18 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+// src/state/useImageStore.tsx
+import {
+  createContext,
+  useContext,
+  useState,
+  type ReactNode,
+} from "react";
+// import { generateThumbnailBlob } from "../utils/ffmpegThumbnail";
+import { generateQuickThumbnail } from "../utils/generateQuickThumbnail";
 
 export type PendingImage = {
   id: string;
   file: File;
-  previewUrl: string;
+  previewUrl: string;          // video URL blob
+  previewImageUrl?: string;    // thumbnail image blob
   saved: boolean;
   uploading?: boolean;
   progress?: number;
@@ -26,30 +35,84 @@ const ImageStoreContext = createContext<ImageStoreContextType | null>(null);
 export function ImageStoreProvider({ children }: { children: ReactNode }) {
   const [images, setImages] = useState<PendingImage[]>([]);
 
-  function addFiles(files: File[]) {
-    const next = files.map((file) => {
-      const id = crypto.randomUUID();
-      const previewUrl = URL.createObjectURL(file);
-      return {
-        id,
-        file,
-        previewUrl,
-        saved: false,
-        uploading: false,
-        progress: 0,
-      } satisfies PendingImage;
+  /* -------------------------------------------------------------
+      ADD FILES
+  -------------------------------------------------------------- */
+async function addFiles(files: File[]) {
+  const results: PendingImage[] = [];
+
+  for (const file of files) {
+    const id = crypto.randomUUID();
+    const previewUrl = URL.createObjectURL(file);
+
+    let previewImageUrl = previewUrl;
+
+    try {
+      previewImageUrl = await generateQuickThumbnail(file);
+    } catch {}
+
+    results.push({
+      id,
+      file,
+      previewUrl,
+      previewImageUrl,
+      saved: false,
+      uploading: false,
+      progress: 0,
     });
-    setImages((prev) => [...prev, ...next]);
   }
 
+  setImages((prev) => [...prev, ...results]);
+}
+
+
+  /* -------------------------------------------------------------
+      UPDATE IMAGE — with URL cleanup!
+  -------------------------------------------------------------- */
   function updateImage(id: string, data: Partial<PendingImage>) {
     setImages((prev) =>
-      prev.map((img) => (img.id === id ? { ...img, ...data } : img))
+      prev.map((img) => {
+        if (img.id !== id) return img;
+
+        // 🔥 If a NEW previewImageUrl arrives → revoke the OLD one
+        if (
+          data.previewImageUrl &&
+          img.previewImageUrl &&
+          img.previewImageUrl !== data.previewImageUrl
+        ) {
+          URL.revokeObjectURL(img.previewImageUrl);
+        }
+
+        // 🔥 If a NEW previewUrl arrives (rare) → revoke the OLD one
+        if (
+          data.previewUrl &&
+          img.previewUrl &&
+          img.previewUrl !== data.previewUrl
+        ) {
+          URL.revokeObjectURL(img.previewUrl);
+        }
+
+        return { ...img, ...data };
+      })
     );
   }
 
+  /* -------------------------------------------------------------
+      REMOVE IMAGE — revoke both blob URLs
+  -------------------------------------------------------------- */
   function removeImage(id: string) {
-    setImages((prev) => prev.filter((img) => img.id !== id));
+    setImages((prev) => {
+      const target = prev.find((img) => img.id === id);
+
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl);
+        if (target.previewImageUrl) {
+          URL.revokeObjectURL(target.previewImageUrl);
+        }
+      }
+
+      return prev.filter((img) => img.id !== id);
+    });
   }
 
   return (

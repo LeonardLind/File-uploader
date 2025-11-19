@@ -28,7 +28,9 @@ export function UploadPage() {
 
     const changed =
       next.length !== uploadedFiles.length ||
-      next.some((n, i) => n.id !== uploadedFiles[i]?.id || n.name !== uploadedFiles[i]?.name);
+      next.some(
+        (n, i) => n.id !== uploadedFiles[i]?.id || n.name !== uploadedFiles[i]?.name
+      );
 
     if (changed) setUploadedFiles(next);
   }, [unsaved]);
@@ -49,44 +51,64 @@ export function UploadPage() {
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]" />
 
-      <main className="relative z-10 flex flex-col flex-1 items-center w-full pt-40 pb-16 px-8">
+      {/* MAIN */}
+      <main
+        className="
+          relative z-10 flex flex-col flex-1 items-center w-full
+          px-6 sm:px-8
+          pt-32 md:pt-15 lg:pt-40
+          pb-12 md:pb-16
+          overflow-y-auto custom-scroll
+        "
+      >
         <div className="w-full max-w-5xl flex flex-col items-center text-center">
+
+          {/* TITLE */}
           {!hasUploads && (
-            <header className="mb-10 transition-opacity duration-300">
-              <h1 className="text-3xl font-semibold mb-3">
+            <header className="mb-8 sm:mb-10 transition-opacity duration-300">
+              <h1 className="text-2xl sm:text-3xl font-semibold mb-2 sm:mb-3">
                 Upload Camera Trap Videos
               </h1>
-              <p className="text-slate-300 text-sm">
+              <p className="text-slate-300 text-xs sm:text-sm px-3">
                 Drop your SD card here. We’ll collect metadata next.
               </p>
             </header>
           )}
 
+          {/* DROPZONE */}
           <div
-            className={`w-full max-w-2xl transition-all duration-500 ${
-              hasUploads ? "mb-8" : "mb-12"
-            }`}
+            className={`
+              w-full max-w-2xl transition-all duration-500
+              ${hasUploads ? "mb-6 sm:mb-8" : "mb-10 sm:mb-12"}
+            `}
           >
             <FileDropzone compact={hasUploads} />
           </div>
 
+          {/* FILE LIST + FOOTER */}
           {hasUploads && (
             <section className="w-full max-w-2xl">
-              <ul className="space-y-2 max-h-[30vh] overflow-y-auto pr-2 custom-scroll">
+
+              {/* LIST SCROLL HEIGHT RESPONSIVE */}
+              <ul
+                className="
+                  space-y-1
+                  max-h-[32vh] sm:max-h-[36vh] md:max-h-[24vh] lg:max-h-[42vh]
+                  overflow-y-auto pr-2 custom-scroll
+                "
+              >
                 {uploadedFiles.map((file) => (
                   <li
                     key={file.id}
-                    className="bg-neutral-800/90 rounded-lg p-4 flex flex-col gap-1"
+                    className="bg-neutral-800/90 rounded-lg p-3 sm:p-2 flex flex-col gap-1"
                   >
-                    <div className="flex items-start justify-between text-sm">
+                    <div className="flex items-start justify-between text-xs sm:text-sm">
                       <div className="text-white font-medium truncate max-w-[70%]">
                         {file.name}
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-slate-300 whitespace-nowrap">
-                        <span className="text-lime-400 font-semibold">
-                          Staged
-                        </span>
+                      <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-300 whitespace-nowrap">
+                        <span className="text-lime-400 font-semibold">Staged</span>
                         <span className="inline-block h-4 w-4 rounded-full bg-lime-400 text-neutral-900 text-[10px] font-bold leading-4 text-center">
                           ✓
                         </span>
@@ -100,7 +122,14 @@ export function UploadPage() {
                 ))}
               </ul>
 
-              <div className="flex items-center justify-between mt-6 text-sm">
+              {/* FOOTER ALWAYS VISIBLE */}
+              <div
+                className="
+                  mt-4 sm:mt-6
+                  py-3 sm:py-4 px-1
+                  flex items-center justify-between text-xs sm:text-sm
+                "
+              >
                 <div className="text-slate-300">
                   <span className="text-white font-semibold">
                     {done}/{total}
@@ -110,7 +139,11 @@ export function UploadPage() {
 
                 <button
                   onClick={handleContinue}
-                  className="bg-lime-400 text-neutral-900 font-semibold rounded-md px-3 py-2 hover:bg-lime-300 transition"
+                  className="
+                    bg-lime-400 text-neutral-900 font-semibold rounded-md
+                    px-2 py-1.5 sm:px-3 sm:py-2
+                    hover:bg-lime-300 transition text-xs sm:text-sm
+                  "
                 >
                   Continue to register
                 </button>

@@ -35,7 +35,6 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
       ]);
 
       try {
-        // Create new FFmpeg instance for each conversion
         const ffmpeg = await getFFmpeg(true);
         const inputName = file.name;
         const outputName = inputName.replace(/\.avi$/i, ".mp4");
@@ -72,22 +71,26 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
         await ffmpeg.deleteFile(inputName);
         await ffmpeg.deleteFile(outputName);
 
-        // Update progress + mark done
+        // Mark this conversion as done
         setProcessing((prev) =>
           prev.map((p) =>
             p.id === id ? { ...p, progress: 100, status: "done" } : p
           )
         );
 
-        // Add converted file to global store
+        // Add converted file to global store (store now dedupes, so one blob)
         addFiles([converted]);
 
-        // Remove from processing list after short delay
+        // Remove from processing list after short delay and update isWorking based on remaining items
         setTimeout(() => {
-          setProcessing((prev) => prev.filter((p) => p.id !== id));
-          // Check if there are any remaining conversions
-          setIsWorking(processing.some((p) => p.status !== "done"));
-
+          setProcessing((prev) => {
+            const next = prev.filter((p) => p.id !== id);
+            const stillWorking = next.some(
+              (p) => p.status !== "done" && p.status !== "error"
+            );
+            setIsWorking(stillWorking);
+            return next;
+          });
         }, 1200);
       } catch (err) {
         console.error("Conversion error:", err);
@@ -96,9 +99,17 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
             p.id === id ? { ...p, status: "error" } : p
           )
         );
+
+        setIsWorking((prevWorking) => {
+          // if this was the only job, flip it off
+          const anyOthers = processing.some(
+            (p) => p.id !== id && p.status !== "done" && p.status !== "error"
+          );
+          return anyOthers ? prevWorking : false;
+        });
       }
     },
-    [addFiles, processing]
+    [addFiles]
   );
 
   // 📂 Handle file drop
@@ -106,16 +117,28 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
     async (acceptedFiles: File[]) => {
       if (!acceptedFiles.length) return;
 
-      setIsWorking(true);
       const normalFiles = acceptedFiles.filter((f) => !isAvi(f));
       const aviFiles = acceptedFiles.filter(isAvi);
 
-      if (normalFiles.length) addFiles(normalFiles);
+      // We only show "working" if there is something to convert
+      if (aviFiles.length > 0) {
+        setIsWorking(true);
+      }
+
+      // Normal files go straight to the store (store dedupes by file)
+      if (normalFiles.length) {
+        addFiles(normalFiles);
+      }
 
       // Convert all AVIs concurrently
       aviFiles.forEach((avi) => {
         convertAviToMp4(avi);
       });
+
+      // If there were *only* normal files → no background work, turn off working state
+      if (aviFiles.length === 0) {
+        setIsWorking(false);
+      }
     },
     [addFiles, convertAviToMp4]
   );
@@ -128,7 +151,6 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
 
   return (
     <div className="w-full flex flex-col items-center">
-      {/* Drop area */}
       <div
         {...getRootProps()}
         className={`relative w-full flex flex-col items-center justify-center rounded-2xl border-4 border-dashed cursor-pointer transition-all
@@ -170,7 +192,6 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
         </div>
       </div>
 
-      {/* Conversion progress below dropzone */}
       {processing.length > 0 && (
         <div className="w-full mt-6 bg-neutral-900 border border-slate-800 rounded-lg p-4">
           <h2 className="text-slate-300 font-medium mb-3">
@@ -185,9 +206,7 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
                 <div className="flex justify-between text-sm text-slate-300">
                   <span className="truncate">{p.name}</span>
                   <span>
-                    {p.status === "error"
-                      ? "❌ Error"
-                      : `${p.progress}%`}
+                    {p.status === "error" ? "Error" : `${p.progress}%`}
                   </span>
                 </div>
                 <div className="w-full bg-white/10 rounded-full h-2 mt-2 overflow-hidden">

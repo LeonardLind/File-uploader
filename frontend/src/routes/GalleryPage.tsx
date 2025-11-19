@@ -36,6 +36,9 @@ export function GalleryPage() {
   const BUCKET_NAME = import.meta.env.VITE_AWS_BUCKET;
   const navigate = useNavigate();
 
+  // ============================
+  // Load items on mount
+  // ============================
   useEffect(() => {
     async function load() {
       try {
@@ -55,6 +58,9 @@ export function GalleryPage() {
     load();
   }, [API_URL]);
 
+  // ============================
+  // Unique filter values
+  // ============================
   const uniqueValues = useMemo(() => {
     const getUnique = (key: keyof MetadataItem) =>
       Array.from(new Set(files.map((f) => f[key]).filter(Boolean))) as string[];
@@ -67,6 +73,9 @@ export function GalleryPage() {
     };
   }, [files]);
 
+  // ============================
+  // Apply filters + sorting
+  // ============================
   useEffect(() => {
     let result = [...files];
 
@@ -88,6 +97,9 @@ export function GalleryPage() {
     setCurrentPage(1);
   }, [files, filters]);
 
+  // ============================
+  // Filter controls
+  // ============================
   const handleFilterChange = (key: keyof typeof filters, value: string) =>
     setFilters((prev) => ({ ...prev, [key]: value }));
 
@@ -101,6 +113,9 @@ export function GalleryPage() {
       updatedSort: "desc",
     });
 
+  // ============================
+  // Selection logic
+  // ============================
   const toggleSelect = (id: string) =>
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -116,6 +131,9 @@ export function GalleryPage() {
     navigate(`/staging/edit?ids=${selected.join(",")}`);
   };
 
+  // ============================
+  // Pagination
+  // ============================
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginatedItems = filtered.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -160,7 +178,7 @@ export function GalleryPage() {
         <button
           key={i}
           onClick={() => goToPage(p)}
-          className={`px-3 py-1 rounded-md text-sm font-medium ${
+          className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${
             p === currentPage
               ? "bg-lime-400 text-black"
               : "bg-neutral-800 text-slate-200 hover:bg-neutral-700"
@@ -169,20 +187,24 @@ export function GalleryPage() {
           {p}
         </button>
       ) : (
-        <span key={i} className="px-2 text-slate-500">
+        <span key={i} className="px-2 text-slate-500 text-sm">
           {p}
         </span>
       )
     );
   };
 
+  // ============================
+  // Render
+  // ============================
   return (
-    <div className="min-h-screen w-screen bg-neutral-950 text-white flex flex-col overflow-hidden">
-      <main className="flex flex-col flex-1 px-10 py-10 items-center overflow-y-auto custom-scroll">
+    <div className="flex flex-col w-full h-full bg-neutral-950 text-white">
+      <main className="flex flex-col flex-1 h-full px-4 sm:px-6 md:px-8 lg:px-10 py-8 items-center overflow-y-auto custom-scroll">
         <div className="w-full max-w-7xl">
-          <div className="mb-2 flex items-baseline justify-between">
+          {/* Header */}
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold text-white">Gallery</h1>
+              <h1 className="text-2xl font-semibold">Gallery</h1>
               <p className="text-slate-400 text-sm">
                 {loading
                   ? "Loading..."
@@ -191,23 +213,12 @@ export function GalleryPage() {
                     }`}
               </p>
             </div>
-
-            <button
-              onClick={handleEditSelected}
-              disabled={selected.length === 0}
-              className={`px-4 py-2 mt-10 rounded-md font-semibold transition ${
-                selected.length === 0
-                  ? "bg-slate-700 text-slate-400 cursor-not-allowed"
-                  : "bg-lime-400 text-black hover:bg-lime-300"
-              }`}
-            >
-              Edit Selected ({selected.length})
-            </button>
           </div>
 
+          {/* Filters */}
           {!loading && files.length > 0 && (
-            <div className="bg-neutral-900 border border-slate-800 rounded-lg p-4 mb-8 flex flex-wrap gap-4 items-center justify-between">
-              <div className="flex flex-wrap gap-3">
+            <div className="bg-neutral-900 border border-slate-800 rounded-lg p-4 mb-8 flex flex-col md:flex-row md:flex-wrap gap-4 items-start md:items-center justify-between">
+              <div className="flex flex-wrap gap-3 flex-1 min-w-0">
                 {(
                   [
                     ["species", "Species"],
@@ -220,10 +231,8 @@ export function GalleryPage() {
                   <select
                     key={key}
                     value={filters[key]}
-                    onChange={(e) =>
-                      handleFilterChange(key, e.target.value)
-                    }
-                    className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-3 py-1.5 text-sm focus:ring-lime-400 focus:border-lime-400"
+                    onChange={(e) => handleFilterChange(key, e.target.value)}
+                    className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-3 py-2 text-sm w-[8.5rem] md:w-[9rem]"
                   >
                     <option value="">{label}</option>
                     {uniqueValues[key].map((val) => (
@@ -239,26 +248,42 @@ export function GalleryPage() {
                   onChange={(e) =>
                     handleFilterChange("updatedSort", e.target.value)
                   }
-                  className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-3 py-1.5 text-sm"
+                  className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-3 py-2 text-sm w-[10rem] md:w-[11rem]"
                 >
                   <option value="desc">Newest first</option>
                   <option value="asc">Oldest first</option>
                 </select>
               </div>
 
-              <button
-                onClick={clearFilters}
-                className="px-3 py-1.5 text-sm rounded-md bg-slate-700 hover:bg-slate-600 text-white transition"
-              >
-                Clear Filters
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={clearFilters}
+                  className="px-3 py-2 text-sm rounded-md bg-slate-700 hover:bg-slate-600 transition"
+                >
+                  Clear Filters
+                </button>
+
+                <button
+                  onClick={handleEditSelected}
+                  disabled={selected.length === 0}
+                  className={`px-4 py-2 text-sm rounded-md font-semibold transition ${
+                    selected.length === 0
+                      ? "bg-slate-700 text-slate-400 cursor-not-allowed"
+                      : "bg-lime-400 text-black hover:bg-lime-300"
+                  }`}
+                >
+                  Edit Selected ({selected.length})
+                </button>
+              </div>
             </div>
           )}
 
+          {/* Error */}
           {error && (
             <p className="text-red-400 mb-6 text-center">Error: {error}</p>
           )}
 
+          {/* Table */}
           {loading ? (
             <p className="text-slate-400 text-center">Fetching data...</p>
           ) : filtered.length === 0 ? (
@@ -266,10 +291,10 @@ export function GalleryPage() {
           ) : (
             <>
               <div className="overflow-x-auto rounded-lg border border-slate-800 bg-neutral-900 shadow-md">
-                <table className="min-w-full text-sm text-slate-300 border-collapse">
-                  <thead className="bg-neutral-800 text-slate-100 text-left uppercase text-xs tracking-wider">
+                <table className="min-w-full text-xs sm:text-sm text-slate-300 border-collapse">
+                  <thead className="bg-neutral-800 text-slate-100 text-left uppercase text-[10px] sm:text-xs tracking-wider">
                     <tr>
-                      <th className="px-4 py-3">
+                      <th className="px-4 py-3 w-10">
                         <input
                           type="checkbox"
                           checked={
@@ -292,77 +317,83 @@ export function GalleryPage() {
                   </thead>
 
                   <tbody>
-  {paginatedItems.map((file) => {
-    const isSelected = selected.includes(file.fileId);
+                    {paginatedItems.map((file) => {
+                      const isSelected = selected.includes(file.fileId);
 
-    return (
-      <tr
-        key={file.fileId}
-        className={`border-t border-slate-800 transition-colors ${
-          isSelected
-            ? "bg-lime-400/10"
-            : "hover:bg-neutral-800/50"
-        }`}
-      >
-        <td className="px-4 py-3">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => toggleSelect(file.fileId)}
-            className="accent-lime-400"
-          />
-        </td>
+                      return (
+                        <tr
+                          key={file.fileId}
+                          onClick={() => toggleSelect(file.fileId)}
+                          className={`border-t border-slate-800 transition-colors cursor-pointer ${
+                            isSelected
+                              ? "bg-lime-400/10"
+                              : "hover:bg-neutral-800/50"
+                          }`}
+                        >
+                          {/* Checkbox (stop event so it doesn't double toggle) */}
+                          <td
+                            className="px-4 py-3"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelect(file.fileId)}
+                              className="accent-lime-400"
+                            />
+                          </td>
 
-        <td className="px-4 py-3 font-medium text-white">
-          {file.species || "—"}
-        </td>
+                          <td className="px-4 py-3 font-medium text-white">
+                            {file.species || "—"}
+                          </td>
 
-        <td className="px-4 py-3">{file.plot || "—"}</td>
+                          <td className="px-4 py-3">{file.plot || "—"}</td>
 
-        <td className="px-4 py-3">
-          {file.experiencePoint || "—"}
-        </td>
+                          <td className="px-4 py-3">
+                            {file.experiencePoint || "—"}
+                          </td>
 
-        <td className="px-4 py-3">{file.sensorId || "—"}</td>
+                          <td className="px-4 py-3">{file.sensorId || "—"}</td>
 
-        <td className="px-4 py-3">
-          {file.deploymentId || "—"}
-        </td>
+                          <td className="px-4 py-3">
+                            {file.deploymentId || "—"}
+                          </td>
 
-        <td className="px-4 py-3">
-          {file.thumbnailId ? (
-            <img
-              src={`https://${BUCKET_NAME}.s3.amazonaws.com/${file.thumbnailId}`}
-              alt="thumbnail"
-              className="w-24 h-16 object-cover rounded-md border border-slate-700"
-            />
-          ) : (
-            <div className="w-24 h-16 rounded-md border border-slate-700 bg-neutral-800 animate-pulse" />
-          )}
-        </td>
+                          <td className="px-4 py-3">
+                            {file.thumbnailId ? (
+                              <img
+                                src={`https://${BUCKET_NAME}.s3.amazonaws.com/${file.thumbnailId}`}
+                                alt="thumbnail"
+                                className="w-20 h-14 sm:w-24 sm:h-16 object-cover rounded-md border border-slate-700"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : (
+                              <div className="w-20 h-14 sm:w-24 sm:h-16 rounded-md border border-slate-700 bg-neutral-800 animate-pulse" />
+                            )}
+                          </td>
 
-        <td className="px-4 py-3 text-slate-400">
-          {file.filename || "—"}
-        </td>
+                          <td className="px-4 py-3 text-slate-400 truncate max-w-[10rem]">
+                            {file.filename || "—"}
+                          </td>
 
-        <td className="px-4 py-3 text-slate-400">
-          {file.updatedAt
-            ? new Date(file.updatedAt).toLocaleString()
-            : "—"}
-        </td>
-      </tr>
-    );
-  })}
-</tbody>
-
+                          <td className="px-4 py-3 text-slate-400 whitespace-nowrap">
+                            {file.updatedAt
+                              ? new Date(file.updatedAt).toLocaleString()
+                              : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
                 </table>
               </div>
 
-              <div className="flex items-center justify-center gap-2 mt-6">
+              {/* Pagination */}
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
                 <button
                   onClick={() => goToPage(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className={`px-3 py-1 rounded-md text-sm font-medium ${
+                  className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${
                     currentPage === 1
                       ? "bg-slate-800 text-slate-500 cursor-not-allowed"
                       : "bg-neutral-800 text-slate-200 hover:bg-neutral-700"
@@ -376,7 +407,7 @@ export function GalleryPage() {
                 <button
                   onClick={() => goToPage(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-1 rounded-md text-sm font-medium ${
+                  className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${
                     currentPage === totalPages
                       ? "bg-slate-800 text-slate-500 cursor-not-allowed"
                       : "bg-neutral-800 text-slate-200 hover:bg-neutral-700"
