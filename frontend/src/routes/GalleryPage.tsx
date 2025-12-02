@@ -716,7 +716,7 @@ export function GalleryPage() {
     setFiles((prev) => prev.map((f) => (f.fileId === fileId ? { ...f, ...updates } : f)));
   };
 
-  const handleRowDoubleClick = (file: MetadataItem) => {
+  const handleRowClick = (file: MetadataItem) => {
     if (view === "action") {
       setHighlightEditor(file);
     } else {
@@ -991,7 +991,7 @@ export function GalleryPage() {
                         return (
                           <tr
                             key={file.fileId}
-                            onDoubleClick={() => handleRowDoubleClick(file)}
+                            onClick={() => handleRowClick(file)}
                             className={`border-t border-slate-800 transition-colors cursor-pointer ${
                               isActive ? "bg-lime-400/10" : "hover:bg-neutral-800/50"
                             }`}

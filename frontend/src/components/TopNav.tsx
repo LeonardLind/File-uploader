@@ -1,6 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import greenCubesLogo from "../assets/greenCubesLogo.png";
-import valeLogo from "../assets/valeLogo.png";
 import userIcon from "../assets/user.png";
 
 export function TopNav() {
@@ -16,10 +15,14 @@ export function TopNav() {
       <div className="max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 h-20">
         <div className="flex items-center gap-3">
           <img src={greenCubesLogo} alt="Green Cubes Logo" className="h-8 sm:h-9 lg:h-10" />
-          <img src={valeLogo} alt="Vale Logo" className="h-7 sm:h-8 lg:h-9 object-contain" />
         </div>
 
-        <nav className="flex items-center gap-4 sm:gap-6">
+        <nav className="relative flex items-center gap-4 sm:gap-6">
+          <div className="absolute left-0 right-0 bottom-0 h-[3px] bg-slate-700 z-0" />
+          <div
+            className="absolute bottom-0 h-[3px] bg-lime-500 rounded-full transition-transform duration-300 ease-out z-10"
+            style={{ width: "33.3333%", transform: `translateX(${activeIndex * 100}%)` }}
+          />
           {[
             { label: "Draft", path: "/gallery?view=draft", i: 0 },
             { label: "Done", path: "/gallery?view=done", i: 1 },
@@ -28,7 +31,7 @@ export function TopNav() {
             <span
               key={label}
               onClick={() => navigate(path)}
-              className={`uppercase cursor-pointer text-sm sm:text-base transition ${
+              className={`relative z-20 uppercase cursor-pointer text-sm sm:text-base pb-1 transition ${
                 activeIndex === i ? "text-lime-500" : "text-slate-300 hover:text-white"
               }`}
             >
