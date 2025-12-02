@@ -20,7 +20,7 @@ export function LoginPage() {
     if (email === VALID_USER && password === VALID_PASS) {
       localStorage.setItem("auth", "true");
       setError("");
-      navigate("/upload");
+      navigate("/gallery");
     } else {
       setError("Invalid credentials. Please try again.");
     }

@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import type { JSX } from "react";
 import { UploadPage } from "./routes/UploadPage";
-import { StagingPage } from "./routes/StagingPage";
 import { GalleryPage } from "./routes/GalleryPage";
 import { LoginPage } from "./routes/LoginPage";
 import { ImageStoreProvider } from "./state/useImageStore";
@@ -17,6 +16,7 @@ function PrivateRoute({ children }: { children: JSX.Element }) {
 function AppContent() {
   const location = useLocation();
   const showTopNav = location.pathname !== "/";
+  const isAuth = localStorage.getItem("auth") === "true";
 
   useEffect(() => {
     (async () => {
@@ -39,20 +39,15 @@ function AppContent() {
         }`}
       >
         <Routes>
-          <Route path="/" element={<LoginPage />} />
+          <Route
+            path="/"
+            element={isAuth ? <Navigate to="/gallery" replace /> : <LoginPage />}
+          />
           <Route
             path="/upload"
             element={
               <PrivateRoute>
                 <UploadPage />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/staging/:id"
-            element={
-              <PrivateRoute>
-                <StagingPage />
               </PrivateRoute>
             }
           />

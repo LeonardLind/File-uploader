@@ -1,0 +1,24 @@
+{
+  "folderPattern": "<client>_<forest>_<plot>_<date>[_<xp>]",
+  "folderRegex": "^(?<client>[A-Za-z0-9-]+)_(?<forest>[A-Za-z0-9-]+)_(?<plot>[A-Za-z0-9-]+)_(?<date>\\d{4}-?\\d{2}-?\\d{2})(?:_(?<xp>[A-Za-z0-9-]+))?$",
+  "dateFormat": "YYYYMMDD",
+  "mediaExtensions": [".jpg", ".jpeg", ".mp4", ".mov", ".avi"],
+  "cameraNamePattern": "CAM(?<camera>[0-9]{2})",
+  "allowed": {
+    "client": ["ACME"],
+    "forest": ["Amazonia", "Cerrado"],
+    "plot": ["P01", "P02"],
+    "xp": ["XP1", "XP2"]
+  },
+  "aliases": {
+    "forest": { "AMZ": "Amazonia" },
+    "xp": { "X1": "XP1" }
+  },
+  "locationLookupRule": ["client", "forest", "plot", "camera_name", "xp"],
+  "upload": {
+    "concurrency": 3,
+    "maxRetries": 5,
+    "backoffMs": [500, 1000, 2000, 4000],
+    "chunkSizeMb": 8
+  }
+}

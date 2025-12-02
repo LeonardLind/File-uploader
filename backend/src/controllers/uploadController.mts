@@ -56,6 +56,12 @@ export async function saveMetadata(req: Request, res: Response): Promise<void> {
       sensorId,
       deploymentId,
       experiencePoint,
+      highlight,
+      displayState,
+      trimStartSec,
+      trimEndSec,
+      highlightThumbnailId,
+      id_state,
     } = req.body as Record<string, any>;
 
     if (!fileId) {
@@ -72,6 +78,12 @@ export async function saveMetadata(req: Request, res: Response): Promise<void> {
       sensorId,
       deploymentId,
       experiencePoint,
+      highlight,
+      displayState,
+      trimStartSec,
+      trimEndSec,
+      highlightThumbnailId,
+      id_state: id_state ?? "Unknown",
       updatedAt: new Date().toISOString(),
     };
 
@@ -136,8 +148,20 @@ export async function getMetadata(req: Request, res: Response): Promise<void> {
 
 export async function updateMetadata(req: Request, res: Response): Promise<void> {
   try {
-    const { fileId, species, plot, experiencePoint, sensorId, deploymentId } =
-      req.body as Record<string, any>;
+    const {
+      fileId,
+      species,
+      plot,
+      experiencePoint,
+      sensorId,
+      deploymentId,
+      highlight,
+      displayState,
+      trimStartSec,
+      trimEndSec,
+      highlightThumbnailId,
+      id_state,
+    } = req.body as Record<string, any>;
 
     if (!fileId) {
       res.status(400).json({ success: false, error: "fileId is required" });
@@ -150,6 +174,12 @@ export async function updateMetadata(req: Request, res: Response): Promise<void>
       experiencePoint,
       sensorId,
       deploymentId,
+      highlight,
+      displayState,
+      trimStartSec,
+      trimEndSec,
+      highlightThumbnailId,
+      id_state,
       updatedAt: new Date().toISOString(),
     };
 

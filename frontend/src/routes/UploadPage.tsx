@@ -1,17 +1,19 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import { useImageStore } from "../state/useImageStore";
 import { FileDropzone } from "../components/FileDropzone";
 import backgroundImage from "../assets/forst.png";
 
 export function UploadPage() {
-  const navigate = useNavigate();
-  const { images } = useImageStore();
+  const { images, updateImage } = useImageStore();
   const [uploadedFiles, setUploadedFiles] = useState<
-    { id: string; name: string; progress: number; done: boolean }[]
+    { id: string; name: string; progress: number; done: boolean; uploading?: boolean }[]
   >([]);
+  const [uploadingAll, setUploadingAll] = useState(false);
 
-  const unsaved = images.filter((img) => !img.saved);
+  const API_URL = import.meta.env.VITE_API_URL;
+  const BUCKET = import.meta.env.VITE_AWS_BUCKET;
+
+  const unsaved = useMemo(() => images.filter((img) => !img.saved), [images]);
 
   function getFileNameFromImage(img: { file?: File | undefined; id: string }) {
     if (img.file && img.file.name) return img.file.name;
@@ -22,26 +24,92 @@ export function UploadPage() {
     const next = unsaved.map((img) => ({
       id: img.id,
       name: getFileNameFromImage(img),
-      progress: 100,
-      done: true,
+      progress: img.progress ?? 0,
+      done: Boolean(img.saved),
+      uploading: Boolean(img.uploading),
     }));
 
-    const changed =
-      next.length !== uploadedFiles.length ||
-      next.some(
-        (n, i) => n.id !== uploadedFiles[i]?.id || n.name !== uploadedFiles[i]?.name
-      );
-
-    if (changed) setUploadedFiles(next);
+    setUploadedFiles(next);
   }, [unsaved]);
 
   const total = uploadedFiles.length;
   const done = uploadedFiles.filter((f) => f.done).length;
   const hasUploads = total > 0;
+  const anyUploading = useMemo(() => uploadedFiles.some((f) => f.uploading), [uploadedFiles]);
 
-  function handleContinue() {
-    if (unsaved.length === 0) return;
-    navigate(`/staging/${unsaved[0].id}`);
+  async function uploadSingle(img: (typeof unsaved)[number]) {
+    if (!img.file) return;
+    try {
+      updateImage(img.id, { uploading: true, progress: 0 });
+
+      const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: img.file.name,
+          contentType: img.file.type || "application/octet-stream",
+        }),
+      });
+
+      const { uploadUrl, key } = await presignRes.json();
+      if (!uploadUrl || !key) throw new Error("Missing upload URL");
+
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadUrl);
+        xhr.setRequestHeader("Content-Type", img.file!.type || "application/octet-stream");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            updateImage(img.id, { progress: pct });
+          }
+        };
+        xhr.onload = () => {
+          if (xhr.status < 300) resolve();
+          else reject(new Error(`Upload failed (${xhr.status})`));
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(img.file);
+      });
+
+      // Persist metadata so gallery can list the file
+      await fetch(`${API_URL}/api/upload/metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId: key, // S3 key returned from presign
+          filename: img.file.name,
+          // Optional fields left empty for now; they can be edited later in Gallery
+          species: img.species,
+          plot: img.plot,
+          experiencePoint: img.experiencePoint,
+          sensorId: img.sensorId,
+          deploymentId: img.deploymentId,
+          thumbnailId: undefined,
+        }),
+      });
+
+      updateImage(img.id, {
+        uploading: false,
+        progress: 100,
+        saved: true,
+        deploymentId: img.deploymentId,
+        sensorId: img.sensorId,
+      });
+    } catch (err) {
+      console.error("Upload error", err);
+      updateImage(img.id, { uploading: false });
+      alert(`Upload failed for ${img.file?.name ?? img.id}`);
+    }
+  }
+
+  async function handleUploadAll() {
+    if (!unsaved.length) return;
+    setUploadingAll(true);
+    for (const img of unsaved) {
+      await uploadSingle(img);
+    }
+    setUploadingAll(false);
   }
 
   return (
@@ -69,9 +137,7 @@ export function UploadPage() {
               <h1 className="text-2xl sm:text-3xl font-semibold mb-2 sm:mb-3">
                 Upload Camera Trap Videos
               </h1>
-              <p className="text-slate-300 text-xs sm:text-sm px-3">
-                Drop your SD card here. We’ll collect metadata next.
-              </p>
+              <p className="text-slate-300 text-xs sm:text-sm px-3">Drop your SD card here. We’ll upload directly.</p>
             </header>
           )}
 
@@ -116,7 +182,10 @@ export function UploadPage() {
                     </div>
 
                     <div className="w-full h-2 bg-slate-700/50 rounded-md overflow-hidden">
-                      <div className="h-full bg-lime-400 transition-all duration-300" style={{ width: "100%" }} />
+                      <div
+                        className="h-full bg-lime-400 transition-all duration-300"
+                        style={{ width: `${file.progress ?? 0}%` }}
+                      />
                     </div>
                   </li>
                 ))}
@@ -134,18 +203,20 @@ export function UploadPage() {
                   <span className="text-white font-semibold">
                     {done}/{total}
                   </span>{" "}
-                  files staged
+                  files
                 </div>
 
                 <button
-                  onClick={handleContinue}
+                  onClick={handleUploadAll}
+                  disabled={!unsaved.length || anyUploading || uploadingAll}
                   className="
                     bg-lime-400 text-neutral-900 font-semibold rounded-md
-                    px-2 py-1.5 sm:px-3 sm:py-2
+                    px-3 py-2
                     hover:bg-lime-300 transition text-xs sm:text-sm
+                    disabled:opacity-50 disabled:cursor-not-allowed
                   "
                 >
-                  Continue to register
+                  {anyUploading || uploadingAll ? "Uploading..." : "Upload to AWS"}
                 </button>
               </div>
             </section>
