@@ -48,7 +48,18 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    const handleSeeked = () => captureFrame();
+    video.addEventListener("seeked", handleSeeked);
+    return () => video.removeEventListener("seeked", handleSeeked);
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
     video.currentTime = frameTime;
+    if (Math.abs(video.currentTime - frameTime) < 0.01) {
+      captureFrame();
+    }
   }, [frameTime]);
 
   useEffect(() => {
@@ -56,6 +67,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
     setReplaceVideo(true);
     setReplaceThumbnail(true);
     setError(null);
+    setFramePreview(null);
   }, [file.fileId]);
 
   const captureFrame = () => {
@@ -152,8 +164,12 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
     }
 
     if (doReplaceThumbnail && !framePreview) {
-      setError("Capture a frame before replacing the thumbnail.");
-      return;
+      // Auto-capture at current frame time if missing for any reason.
+      captureFrame();
+      if (!framePreview) {
+        setError("Unable to capture thumbnail frame. Try adjusting the thumbnail moment.");
+        return;
+      }
     }
 
     setSaving(true);
@@ -352,38 +368,39 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="space-y-3">
-            <div className="rounded-xl border border-slate-800 bg-neutral-900 overflow-hidden">
-              <video
-                ref={videoRef}
-                src={videoUrl}
-                crossOrigin="anonymous"
-                controls
-                className="w-full h-[280px] object-contain bg-black"
-                onLoadedMetadata={(e) => {
-                  const dur = (e.target as HTMLVideoElement).duration;
-                  if (isFinite(dur)) {
-                    setDuration(dur);
-                    if (!trimEnd) setTrimEnd(Math.max(trimStart, Math.round(dur)));
-                  }
-                }}
-              />
-              <div className="p-4 space-y-3">
-                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-                    Start: {trimStart.toFixed(1)}s
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-                    End: {trimEnd.toFixed(1)}s
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-                    Clip: {(trimEnd - trimStart).toFixed(1)}s
-                  </span>
-                </div>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-800 bg-neutral-900 overflow-hidden">
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              crossOrigin="anonymous"
+              controls
+              className="w-full h-[360px] lg:h-[420px] object-contain bg-black"
+              onLoadedMetadata={(e) => {
+                const dur = (e.target as HTMLVideoElement).duration;
+                if (isFinite(dur)) {
+                  setDuration(dur);
+                  if (!trimEnd) setTrimEnd(Math.max(trimStart, Math.round(dur)));
+                  captureFrame();
+                }
+              }}
+            />
+            <div className="p-4 space-y-4">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
+                  Start: {trimStart.toFixed(1)}s
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
+                  End: {trimEnd.toFixed(1)}s
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
+                  Clip: {(trimEnd - trimStart).toFixed(1)}s
+                </span>
+              </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm text-slate-300">Frame time</label>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="space-y-2 lg:col-span-2">
+                  <label className="text-sm text-slate-300">Thumbnail moment</label>
                   <div className="flex items-center gap-3">
                     <input
                       type="range"
@@ -396,19 +413,31 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                     />
                     <input
                       type="number"
-                      className="w-20 bg-neutral-800 border border-slate-700 rounded px-2 py-1 text-sm text-white"
+                      className="w-24 bg-neutral-800 border border-slate-700 rounded px-2 py-1 text-sm text-white"
                       value={frameTime}
                       onChange={(e) => setFrameTime(Number(e.target.value))}
                       min={0}
                       max={duration ?? undefined}
                       step={0.1}
                     />
+                    <div className="flex items-center gap-2 bg-neutral-800 border border-slate-700 rounded-md px-2 py-1">
+                      {framePreview ? (
+                        <img
+                          src={framePreview}
+                          alt="Thumbnail preview"
+                          className="w-14 h-10 object-cover rounded border border-slate-700"
+                        />
+                      ) : (
+                        <div className="w-14 h-10 rounded border border-dashed border-slate-700 bg-neutral-900" />
+                      )}
+                      <span className="text-xs text-slate-300">Auto-captured</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-sm text-slate-300">Trim start</label>
+                <div className="space-y-2">
+                  <label className="text-sm text-slate-300">Trim bounds</label>
+                  <div className="grid grid-cols-2 gap-2">
                     <input
                       type="number"
                       className="w-full bg-neutral-800 border border-slate-700 rounded px-2 py-2 text-sm text-white"
@@ -418,9 +447,6 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                       step={0.1}
                       onChange={(e) => setTrimStart(Number(e.target.value))}
                     />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-sm text-slate-300">Trim end</label>
                     <input
                       type="number"
                       className="w-full bg-neutral-800 border border-slate-700 rounded px-2 py-2 text-sm text-white"
@@ -431,85 +457,50 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                     />
                   </div>
                 </div>
+              </div>
 
-                <div className="flex flex-wrap gap-3">
-                  {file.highlight && (
+              <div className="flex flex-wrap gap-3">
+                {file.highlight && (
+                  <button
+                    onClick={handleRevertToDone}
+                    disabled={reverting}
+                    className="px-4 py-2 rounded-md bg-red-500 text-white font-semibold hover:bg-red-400 transition disabled:opacity-60"
+                  >
+                    {reverting ? "Reverting..." : "Revert to Done"}
+                  </button>
+                )}
+                <button
+                  onClick={handleSaveClick}
+                  disabled={saving}
+                  className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60"
+                >
+                  {saving ? "Saving..." : "Save highlight"}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {hasExistingHighlightAssets && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-amber-100 font-semibold text-sm">Existing highlight detected</p>
                     <button
-                      onClick={handleRevertToDone}
-                      disabled={reverting}
-                      className="px-4 py-2 rounded-md bg-red-500 text-white font-semibold hover:bg-red-400 transition disabled:opacity-60"
+                      onClick={() => setShowReplacePrompt(true)}
+                      className="text-xs px-3 py-1 rounded-md bg-amber-400 text-black font-semibold hover:bg-amber-300 transition"
                     >
-                      {reverting ? "Reverting..." : "Revert to Done"}
+                      Change replace options
                     </button>
-                  )}
-                  <button
-                    onClick={captureFrame}
-                    className="px-4 py-2 rounded-md bg-blue-500 text-black font-semibold hover:bg-blue-400 transition"
-                  >
-                    Capture frame
-                  </button>
-                  <button
-                    onClick={handleSaveClick}
-                    disabled={saving}
-                    className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60"
-                  >
-                    {saving ? "Saving..." : "Save highlight"}
-                  </button>
-                  <button
-                    onClick={onClose}
-                    className="px-4 py-2 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="rounded-xl border border-slate-800 bg-neutral-900 p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-semibold text-white">Thumbnail preview</h3>
-                <span className="text-xs text-slate-400">
-                  {framePreview ? "Ready to upload" : "Capture a frame"}
-                </span>
-              </div>
-
-              {framePreview ? (
-                <img
-                  src={framePreview}
-                  alt="Captured frame"
-                  className="w-full max-h-72 object-contain rounded-md border border-slate-800"
-                />
-              ) : (
-                <div className="w-full h-72 bg-neutral-950 border border-dashed border-slate-700 rounded-md flex items-center justify-center text-slate-500 text-sm">
-                  Use the slider and "Capture frame" to pick a thumbnail moment.
+                  </div>
+                  <p className="text-amber-100/80 text-xs">
+                    We’ll replace the trimmed video/thumbnail unless you opt out in the dialog.
+                  </p>
                 </div>
               )}
-
-              <ul className="mt-3 text-xs text-slate-400 space-y-1">
-                <li>• Drag the video timeline to find your moment.</li>
-                <li>• Capture before saving if you want to replace the thumbnail.</li>
-                <li>• Keep the current thumbnail by leaving "Replace thumbnail" unchecked.</li>
-              </ul>
             </div>
-
-            {hasExistingHighlightAssets && (
-              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-amber-100 font-semibold text-sm">Existing highlight detected</p>
-                  <button
-                    onClick={() => setShowReplacePrompt(true)}
-                    className="text-xs px-3 py-1 rounded-md bg-amber-400 text-black font-semibold hover:bg-amber-300 transition"
-                  >
-                    Change replace options
-                  </button>
-                </div>
-                <p className="text-amber-100/80 text-xs">
-                  We’ll replace the trimmed video/thumbnail unless you opt out in the dialog.
-                </p>
-              </div>
-            )}
           </div>
         </div>
 
