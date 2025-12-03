@@ -10,3 +10,4 @@ const client = new DynamoDBClient({
 
 export const ddb = DynamoDBDocumentClient.from(client);
 export const TABLE_NAME = process.env.DYNAMO_TABLE!;
+export const HIGHLIGHT_TABLE_NAME = process.env.HIGHLIGHT_DYNAMO_TABLE || process.env.DYNAMO_HIGHLIGHT_TABLE;

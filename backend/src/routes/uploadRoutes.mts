@@ -6,6 +6,8 @@ import {
   getMetadata,
   updateMetadata, 
   deleteFileAndMetadata, 
+  saveHighlightAsset,
+  deleteHighlightAsset,
 } from "../controllers/uploadController.mjs";
 
 const router = express.Router();
@@ -20,6 +22,10 @@ router.get("/metadata/:fileId", getMetadata);
 
 // Update metadata
 router.put("/metadata/update", updateMetadata);
+
+// Save highlight asset (trim + thumbnail) to highlight bucket/table
+router.post("/highlight", saveHighlightAsset);
+router.post("/highlight/delete", deleteHighlightAsset);
 
 // Delete metadata + S3 file
 router.delete("/delete", deleteFileAndMetadata);

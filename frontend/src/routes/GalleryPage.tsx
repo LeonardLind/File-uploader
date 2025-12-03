@@ -1,23 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
-
-type MetadataItem = {
-  fileId: string;
-  thumbnailId?: string;
-  highlightThumbnailId?: string;
-  filename: string;
-  species?: string;
-  plot?: string;
-  experiencePoint?: string;
-  sensorId?: string;
-  deploymentId?: string;
-  updatedAt?: string;
-  highlight?: boolean;
-  displayState?: string;
-  trimStartSec?: number;
-  trimEndSec?: number;
-  id_state?: string;
-};
+import { HighlightEditorModal } from "../components/HighlightEditorModal";
+import { GalleryFilterBar } from "../components/GalleryFilterBar";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import type { MetadataItem } from "../types/gallery";
 
 type Status = "register" | "finish" | "action";
 type ViewFilter = "draft" | "done" | "action";
@@ -108,248 +94,11 @@ function deriveStatus(item: MetadataItem): Status {
   return "register";
 }
 
-function dataUrlToBlob(dataUrl: string) {
-  const [meta, content] = dataUrl.split(",");
-  const mime = meta.match(/:(.*?);/)?.[1] ?? "image/jpeg";
-  const binary = atob(content);
-  const array = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
-  return new Blob([array], { type: mime });
-}
-
 function extractCameraName(key?: string): string | null {
   if (!key) return null;
   const base = key.split("/").pop() ?? key;
   const match = base.match(/(CAM\d{3})/i);
   return match ? match[1].toUpperCase() : null;
-}
-
-type HighlightEditorProps = {
-  file: MetadataItem;
-  bucket: string;
-  apiUrl: string;
-  onClose: () => void;
-  onSaved: (updates: Partial<MetadataItem>) => void;
-};
-
-function HighlightEditor({ file, bucket, apiUrl, onClose, onSaved }: HighlightEditorProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [duration, setDuration] = useState<number | null>(null);
-  const [trimStart, setTrimStart] = useState<number>(file.trimStartSec ?? 0);
-  const [trimEnd, setTrimEnd] = useState<number>(file.trimEndSec ?? 0);
-  const [frameTime, setFrameTime] = useState<number>(file.trimStartSec ?? 0);
-  const [framePreview, setFramePreview] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const videoUrl = `https://${bucket}.s3.amazonaws.com/${file.fileId}`;
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.currentTime = frameTime;
-  }, [frameTime]);
-
-  const captureFrame = () => {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-    setFramePreview(dataUrl);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    setError(null);
-
-    try {
-      let highlightThumbnailId = file.highlightThumbnailId || file.thumbnailId;
-
-      if (framePreview) {
-        const blob = dataUrlToBlob(framePreview);
-        const presignRes = await fetch(`${apiUrl}/api/upload/presign`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: `highlight_${file.filename}.jpg`,
-            contentType: "image/jpeg",
-            type: "thumbnail",
-          }),
-        });
-
-        const presignData = await presignRes.json();
-        if (!presignData.uploadUrl || !presignData.key) {
-          throw new Error("Failed to get upload URL for thumbnail");
-        }
-
-        await fetch(presignData.uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": "image/jpeg" },
-          body: blob,
-        });
-
-        highlightThumbnailId = presignData.key;
-      }
-
-      await fetch(`${apiUrl}/api/upload/metadata/update`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: file.fileId,
-          highlight: true,
-          displayState: "Action",
-          trimStartSec: trimStart,
-          trimEndSec: trimEnd,
-          highlightThumbnailId,
-        }),
-      });
-
-      onSaved({
-        highlight: true,
-        displayState: "Action",
-        trimStartSec: trimStart,
-        trimEndSec: trimEnd,
-        highlightThumbnailId,
-        updatedAt: new Date().toISOString(),
-      });
-      onClose();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save highlight settings");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
-      <div className="bg-neutral-900 border border-slate-800 rounded-xl w-full max-w-5xl shadow-2xl p-6 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-white">Highlight editor</h2>
-            <p className="text-slate-400 text-sm">
-              Mark trim points and capture a thumbnail frame for downstream web use.
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-300 hover:text-white px-3 py-1 rounded-md border border-slate-700"
-          >
-            Close
-          </button>
-        </div>
-
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-black rounded-lg overflow-hidden border border-slate-800">
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              controls
-              className="w-full h-[260px] object-contain bg-black"
-              onLoadedMetadata={(e) => {
-                const dur = (e.target as HTMLVideoElement).duration;
-                if (isFinite(dur)) {
-                  setDuration(dur);
-                  if (!trimEnd) setTrimEnd(Math.max(trimStart, Math.round(dur)));
-                }
-              }}
-            />
-
-            <div className="p-4 space-y-3">
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-slate-300 w-28">Frame time</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={duration ?? Math.max(trimEnd, trimStart + 1)}
-                  step={0.1}
-                  value={frameTime}
-                  onChange={(e) => setFrameTime(Number(e.target.value))}
-                  className="flex-1"
-                />
-                <input
-                  type="number"
-                  className="w-20 bg-neutral-800 border border-slate-700 rounded px-2 py-1 text-sm text-white"
-                  value={frameTime}
-                  onChange={(e) => setFrameTime(Number(e.target.value))}
-                  min={0}
-                  max={duration ?? undefined}
-                  step={0.1}
-                />
-              </div>
-
-              <div className="flex items-center gap-3">
-                <label className="text-sm text-slate-300 w-28">Trim start</label>
-                <input
-                  type="number"
-                  className="w-24 bg-neutral-800 border border-slate-700 rounded px-2 py-1 text-sm text-white"
-                  value={trimStart}
-                  min={0}
-                  max={trimEnd || undefined}
-                  step={0.1}
-                  onChange={(e) => setTrimStart(Number(e.target.value))}
-                />
-
-                <label className="text-sm text-slate-300">Trim end</label>
-                <input
-                  type="number"
-                  className="w-24 bg-neutral-800 border border-slate-700 rounded px-2 py-1 text-sm text-white"
-                  value={trimEnd}
-                  min={trimStart}
-                  step={0.1}
-                  onChange={(e) => setTrimEnd(Number(e.target.value))}
-                />
-              </div>
-
-              <button
-                onClick={captureFrame}
-                className="px-4 py-2 rounded-md bg-blue-500 text-black font-semibold hover:bg-blue-400 transition"
-              >
-                Capture frame
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-neutral-950 border border-slate-800 rounded-lg p-4 flex flex-col gap-4">
-            <h3 className="text-lg font-semibold text-white">Thumbnail preview</h3>
-            {framePreview ? (
-              <img
-                src={framePreview}
-                alt="Captured frame"
-                className="w-full max-h-64 object-contain rounded-md border border-slate-800"
-              />
-            ) : (
-              <div className="w-full h-64 bg-neutral-900 border border-dashed border-slate-700 rounded-md flex items-center justify-center text-slate-500 text-sm">
-                Capture a frame to preview
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60"
-              >
-                {saving ? "Saving…" : "Save highlight"}
-              </button>
-              <button
-                onClick={onClose}
-                className="px-4 py-2 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 type EditPaneProps = {
@@ -372,9 +121,11 @@ type EditPaneProps = {
     status: "done" | "action";
     id_state: string;
   }) => void;
+  onDelete: (fileId: string) => void;
+  onAlert: (title: string, message: string) => void;
 };
 
-function EditPane({ file, bucket, uniqueValues, onClose, onSave }: EditPaneProps) {
+function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAlert }: EditPaneProps) {
   const [species, setSpecies] = useState(file.species ?? "");
   const [plot, setPlot] = useState(file.plot ?? "");
   const [experiencePoint, setExperiencePoint] = useState(file.experiencePoint ?? "");
@@ -386,6 +137,10 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave }: EditPaneProps
   const [idState, setIdState] = useState(file.id_state || "Unknown");
 
   const locked = deriveStatus(file) === "action";
+  const allFieldsFilled = [species, plot, experiencePoint, sensorId, deploymentId].every(
+    (val) => !!val && val.trim() !== ""
+  );
+  const canSetAction = idState === "Confirmed" && allFieldsFilled;
 
   useEffect(() => {
     setSpecies(file.species ?? "");
@@ -396,6 +151,12 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave }: EditPaneProps
     setStatus(file.highlight ? "action" : "done");
     setIdState(file.id_state || "Unknown");
   }, [file]);
+
+  useEffect(() => {
+    if (status === "action" && !canSetAction) {
+      setStatus("done");
+    }
+  }, [status, canSetAction]);
 
   const save = () => {
     const payloadIdState = idState || "Unknown";
@@ -449,11 +210,23 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave }: EditPaneProps
           <label className="text-xs text-slate-400">Status</label>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as "done" | "action")}
+            onChange={(e) => {
+              const nextStatus = e.target.value as "done" | "action";
+              if (nextStatus === "action" && !canSetAction) {
+                onAlert(
+                  "Action requires confirmed metadata",
+                  "All fields must be filled and ID State must be Confirmed before setting status to Action."
+                );
+                return;
+              }
+              setStatus(nextStatus);
+            }}
             className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
           >
             <option value="done">Done</option>
-            <option value="action">Action</option>
+            <option value="action" disabled={!canSetAction}>
+              Action
+            </option>
           </select>
         </div>
 
@@ -461,7 +234,10 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave }: EditPaneProps
           <label className="text-xs text-slate-400">ID State</label>
           <select
             value={idState}
-            onChange={(e) => setIdState(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setIdState(next);
+            }}
             className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
           >
             {["Unknown", "Genus", "AI ID", "Guess", "Confirmed"].map((opt) => (
@@ -543,6 +319,12 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave }: EditPaneProps
 
       <div className="flex justify-end gap-3">
         <button
+          onClick={() => onDelete(file.fileId)}
+          className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 transition"
+        >
+          Delete
+        </button>
+        <button
           onClick={save}
           className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition"
         >
@@ -567,6 +349,18 @@ export function GalleryPage() {
   const [highlightEditor, setHighlightEditor] = useState<MetadataItem | null>(null);
   const [editing, setEditing] = useState<MetadataItem | null>(null);
   const [view, setView] = useState<ViewFilter>("draft");
+  const [confirmState, setConfirmState] = useState<
+    | ({
+        title: string;
+        message: string;
+        confirmLabel?: string;
+        cancelLabel?: string;
+        tone?: "danger" | "info";
+        hideCancel?: boolean;
+        resolve: (value: boolean) => void;
+      })
+    | null
+  >(null);
 
   const [filters, setFilters] = useState({
     species: "",
@@ -574,6 +368,7 @@ export function GalleryPage() {
     experiencePoint: "",
     sensorId: "",
     deploymentId: "",
+    id_state: "",
     updatedSort: "desc",
   });
 
@@ -582,8 +377,24 @@ export function GalleryPage() {
 
   const API_URL = import.meta.env.VITE_API_URL;
   const BUCKET_NAME = import.meta.env.VITE_AWS_BUCKET;
+  const HIGHLIGHT_BUCKET = import.meta.env.VITE_AWS_HIGHLIGHT_BUCKET || BUCKET_NAME;
   const location = useLocation();
   const autoFilledIds = useRef<Set<string>>(new Set());
+
+  const requestConfirm = (options: {
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    tone?: "danger" | "info";
+    hideCancel?: boolean;
+  }) =>
+    new Promise<boolean>((resolve) => {
+      setConfirmState({ ...options, resolve });
+    });
+
+  const requestAlert = (options: { title: string; message: string }) =>
+    requestConfirm({ ...options, confirmLabel: "OK", hideCancel: true });
 
   useEffect(() => {
     async function load() {
@@ -654,6 +465,11 @@ export function GalleryPage() {
   }, [files, filters, location.search]);
 
   useEffect(() => {
+    setEditing(null);
+    setHighlightEditor(null);
+  }, [view]);
+
+  useEffect(() => {
     async function autofillMissing() {
       const candidates = files.filter(
         (f) =>
@@ -709,11 +525,45 @@ export function GalleryPage() {
       experiencePoint: "",
       sensorId: "",
       deploymentId: "",
+      id_state: "",
       updatedSort: "desc",
     });
 
   const updateLocal = (fileId: string, updates: Partial<MetadataItem>) => {
     setFiles((prev) => prev.map((f) => (f.fileId === fileId ? { ...f, ...updates } : f)));
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    const confirmed = await requestConfirm({
+      title: "Delete file?",
+      message: "This will permanently remove the video from S3 and delete its metadata.",
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/upload/delete`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result?.success) {
+        throw new Error(result?.error || "Delete failed");
+      }
+
+      setFiles((prev) => prev.filter((f) => f.fileId !== fileId));
+      setEditing((prev) => (prev?.fileId === fileId ? null : prev));
+      setHighlightEditor((prev) => (prev?.fileId === fileId ? null : prev));
+    } catch (err: unknown) {
+      console.error("Delete failed", err);
+      requestAlert({
+        title: "Delete failed",
+        message: err instanceof Error ? err.message : "Failed to delete file",
+      });
+    }
   };
 
   const handleRowClick = (file: MetadataItem) => {
@@ -734,6 +584,22 @@ export function GalleryPage() {
     id_state: string;
   }) => {
     if (!editing) return;
+    if (payload.status === "action") {
+      const requiredFilled = [
+        payload.species,
+        payload.plot,
+        payload.experiencePoint,
+        payload.sensorId,
+        payload.deploymentId,
+      ].every((val) => (val ?? "").trim() !== "");
+      if (!requiredFilled || payload.id_state !== "Confirmed") {
+        await requestAlert({
+          title: "Action requires confirmed metadata",
+          message: "All fields must be filled and ID State must be Confirmed before setting status to Action.",
+        });
+        return;
+      }
+    }
     const nextHighlight = payload.status === "action";
     const nextDisplay = nextHighlight ? "Action" : "Showcase";
 
@@ -773,11 +639,11 @@ export function GalleryPage() {
       if (currentIndex >= 0 && currentIndex < filtered.length - 1) {
         setEditing(filtered[currentIndex + 1]);
       }
-    } catch (err: unknown) {
-      console.error("Failed to save metadata", err);
-      alert("Save failed");
-    }
-  };
+  } catch (err: unknown) {
+    console.error("Failed to save metadata", err);
+    requestAlert({ title: "Save failed", message: "Please try again." });
+  }
+};
 
   const statusStyles: Record<
     Status,
@@ -891,55 +757,13 @@ export function GalleryPage() {
           </div>
 
           {!loading && files.length > 0 && (
-            <div className="bg-neutral-900 border border-slate-800 rounded-lg p-4 mb-8 flex flex-col md:flex-row md:flex-wrap gap-4 items-start md:items-center justify-between">
-              <div className="flex flex-wrap gap-3 flex-1 min-w-0">
-                {(
-                  [
-                    ["species", "Species"],
-                    ["plot", "Plot"],
-                    ["experiencePoint", "Experience"],
-                    ["sensorId", "Sensor"],
-                    ["deploymentId", "Deployment"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <select
-                    key={key}
-                    value={filters[key]}
-                    onChange={(e) => handleFilterChange(key, e.target.value)}
-                    className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-3 py-2 text-sm w-[8.5rem] md:w-[9rem]"
-                  >
-                    <option value="">{label}</option>
-                    {uniqueValues[key].map((val) => (
-                      <option key={val} value={val}>
-                        {val}
-                      </option>
-                    ))}
-                  </select>
-                ))}
-
-                <select
-                  value={filters.updatedSort}
-                  onChange={(e) =>
-                    handleFilterChange("updatedSort", e.target.value)
-                  }
-                  className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-3 py-2 text-sm w-[10rem] md:w-[11rem]"
-                >
-                  <option value="desc">Newest first</option>
-                  <option value="asc">Oldest first</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={clearFilters}
-                  className="px-3 py-2 text-sm rounded-md bg-slate-700 hover:bg-slate-600 transition"
-                >
-                  Clear Filters
-                </button>
-              </div>
-            </div>
+            <GalleryFilterBar
+              filters={filters}
+              uniqueValues={uniqueValues}
+              onChange={handleFilterChange}
+              onClear={clearFilters}
+            />
           )}
-
           {error && (
             <p className="text-red-400 mb-6 text-center">Error: {error}</p>
           )}
@@ -958,12 +782,16 @@ export function GalleryPage() {
                     uniqueValues={uniqueValues}
                     onClose={() => setEditing(null)}
                     onSave={handleSaveEdit}
+                    onDelete={handleDeleteFile}
+                    onAlert={(title, message) => {
+                      requestAlert({ title, message });
+                    }}
                   />
                 </div>
               )}
 
               <div className="w-full">
-                <div className="overflow-x-auto rounded-lg border border-slate-800 bg-neutral-900 shadow-md">
+                <div className="overflow-x-auto rounded-lg border border-slate-800 bg-neutral-900 shadow-md custom-scroll">
                   <table className="min-w-full text-xs sm:text-sm text-slate-300 border-collapse">
                     <thead className="bg-neutral-800 text-slate-100 text-left uppercase text-[10px] sm:text-xs tracking-wider">
                       <tr>
@@ -975,6 +803,7 @@ export function GalleryPage() {
                         <th className="px-4 py-3">Sensor</th>
                         <th className="px-4 py-3">Deployment</th>
                         {view === "action" && <th className="px-4 py-3">Preview</th>}
+                        {view === "action" && <th className="px-4 py-3">Trimmed</th>}
                         <th className="px-4 py-3">Filename</th>
                         <th className="px-4 py-3">Updated</th>
                       </tr>
@@ -987,6 +816,7 @@ export function GalleryPage() {
                         const isActive =
                           editing?.fileId === file.fileId ||
                           highlightEditor?.fileId === file.fileId;
+                        const hasTrimmedHighlight = Boolean(file.highlightFileId && file.highlightThumbnailId);
 
                         return (
                           <tr
@@ -1030,7 +860,7 @@ export function GalleryPage() {
                               <td className="px-4 py-3">
                                 {file.highlightThumbnailId || file.thumbnailId ? (
                                   <img
-                                    src={`https://${BUCKET_NAME}.s3.amazonaws.com/${file.highlightThumbnailId || file.thumbnailId}`}
+                                    src={`https://${file.highlightThumbnailId ? HIGHLIGHT_BUCKET : BUCKET_NAME}.s3.amazonaws.com/${file.highlightThumbnailId || file.thumbnailId}`}
                                     alt="thumbnail"
                                     className="w-20 h-14 sm:w-24 sm:h-16 object-cover rounded-md border border-slate-700"
                                     onClick={(e) => e.stopPropagation()}
@@ -1043,8 +873,21 @@ export function GalleryPage() {
                               </td>
                             )}
 
+                            {view === "action" && (
+                              <td className="px-4 py-3">
+                                <input
+                                  type="checkbox"
+                                  checked={hasTrimmedHighlight}
+                                  readOnly
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Highlight video and thumbnail uploaded"
+                                  className="w-4 h-4 accent-lime-400 cursor-default"
+                                />
+                              </td>
+                            )}
+
                             <td className="px-4 py-3 text-slate-400 truncate max-w-[10rem]">
-                              {file.filename || "—"}
+                              {file.filename || "-"}
                             </td>
 
                             <td className="px-4 py-3 text-slate-400 whitespace-nowrap">
@@ -1093,14 +936,33 @@ export function GalleryPage() {
       </main>
 
       {highlightEditor && (
-        <HighlightEditor
+        <HighlightEditorModal
           file={highlightEditor}
           bucket={BUCKET_NAME}
           apiUrl={API_URL}
+          requestConfirm={requestConfirm}
           onClose={() => setHighlightEditor(null)}
           onSaved={(updates) => updateLocal(highlightEditor.fileId, updates)}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(confirmState)}
+        title={confirmState?.title || ""}
+        message={confirmState?.message || ""}
+        confirmLabel={confirmState?.confirmLabel}
+        cancelLabel={confirmState?.cancelLabel}
+        tone={confirmState?.tone}
+        hideCancel={confirmState?.hideCancel}
+        onConfirm={() => {
+          confirmState?.resolve(true);
+          setConfirmState(null);
+        }}
+        onCancel={() => {
+          confirmState?.resolve(false);
+          setConfirmState(null);
+        }}
+      />
     </div>
   );
 }
