@@ -5,8 +5,8 @@ import { GalleryFilterBar } from "../components/GalleryFilterBar";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { MetadataItem } from "../types/gallery";
 
-type Status = "draft" | "done" | "id" | "action";
-type ViewFilter = "draft" | "done" | "id" | "action";
+type Status = "draft" | "id" | "display" | "action";
+type ViewFilter = "draft" | "id" | "display" | "action";
 
 type CameraAutofill = {
   plot: string;
@@ -89,8 +89,9 @@ function isComplete(item: MetadataItem) {
 
 function deriveStatus(item: MetadataItem): Status {
   if (item.highlight) return "action";
-  if (item.id_state === "Confirmed" && item.species) return "id";
-  if (isComplete(item)) return "done";
+  if (item.stage) return item.stage as Status;
+  if (item.id_state === "Confirmed" && item.species) return "display";
+  if (isComplete(item)) return "id";
   return "draft";
 }
 
@@ -125,15 +126,22 @@ type EditPaneProps = {
   }) => void;
   onDelete: (fileId: string) => void;
   onAlert: (title: string, message: string) => void;
+  currentView: ViewFilter;
 };
 
-function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAlert }: EditPaneProps) {
+function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAlert, currentView }: EditPaneProps) {
+  const defaultStage = useMemo<Status>(() => {
+    if (currentView === "draft") return "id";
+    if (currentView === "id") return "display";
+    return deriveStatus(file);
+  }, [currentView, file]);
+
   const [species, setSpecies] = useState(file.species ?? "");
   const [plot, setPlot] = useState(file.plot ?? "");
   const [experiencePoint, setExperiencePoint] = useState(file.experiencePoint ?? "");
   const [sensorId, setSensorId] = useState(file.sensorId ?? "");
   const [deploymentId, setDeploymentId] = useState(file.deploymentId ?? "");
-  const [status, setStatus] = useState<Status>(deriveStatus(file));
+  const [status, setStatus] = useState<Status>(defaultStage);
   const [idState, setIdState] = useState(file.id_state || "Unknown");
   const [active, setActive] = useState(file.displayState !== "Inactive");
 
@@ -149,10 +157,10 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
     setExperiencePoint(file.experiencePoint ?? "");
     setSensorId(file.sensorId ?? "");
     setDeploymentId(file.deploymentId ?? "");
-    setStatus(deriveStatus(file));
+    setStatus(defaultStage);
     setIdState(file.id_state || "Unknown");
     setActive(file.displayState !== "Inactive");
-  }, [file]);
+  }, [file, defaultStage]);
 
   useEffect(() => {
     if (status === "action" && !canSetAction) {
@@ -216,10 +224,10 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
             value={status}
             onChange={(e) => {
               const nextStatus = e.target.value as Status;
-              if ((nextStatus === "id" || nextStatus === "action") && (!canSetAction || idState !== "Confirmed")) {
+              if ((nextStatus === "display" || nextStatus === "action") && (!canSetAction || idState !== "Confirmed")) {
                 onAlert(
-                  nextStatus === "id"
-                    ? "ID requires confirmed metadata"
+                  nextStatus === "display"
+                    ? "Display requires confirmed metadata"
                     : "Action requires confirmed metadata",
                   "All fields must be filled and ID State must be Confirmed before moving to this stage."
                 );
@@ -230,9 +238,9 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
             className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
           >
             <option value="draft">Draft</option>
-            <option value="done">Done</option>
-            <option value="id" disabled={!canSetAction || idState !== "Confirmed"}>
-              ID
+            <option value="id">ID</option>
+            <option value="display" disabled={!canSetAction || idState !== "Confirmed"}>
+              Display
             </option>
             <option value="action" disabled={!canSetAction || idState !== "Confirmed"}>
               Action
@@ -430,6 +438,7 @@ export function GalleryPage() {
         const items = (data.items || []).map((item: MetadataItem) => ({
           ...item,
           id_state: item.id_state || "Unknown",
+          stage: (item as any).stage || "draft",
         }));
         setFiles(items);
       } catch (err: unknown) {
@@ -468,10 +477,10 @@ export function GalleryPage() {
 
     const nextView = (new URLSearchParams(location.search).get("view") as ViewFilter | null) || "draft";
     setView(nextView);
-    if (nextView === "done") {
-      result = result.filter((f) => deriveStatus(f) === "done");
-    } else if (nextView === "id") {
+    if (nextView === "id") {
       result = result.filter((f) => deriveStatus(f) === "id");
+    } else if (nextView === "display") {
+      result = result.filter((f) => deriveStatus(f) === "display");
     } else if (nextView === "action") {
       result = result.filter((f) => deriveStatus(f) === "action");
     } else {
@@ -527,6 +536,7 @@ export function GalleryPage() {
             deploymentId: meta.deploymentId,
             experiencePoint: meta.experiencePoint,
             id_state: file.id_state || "Unknown",
+            stage: file.stage || "draft",
             updatedAt: new Date().toISOString(),
           });
           autoFilledIds.current.add(file.fileId);
@@ -591,7 +601,7 @@ export function GalleryPage() {
   };
 
   const handleRowClick = (file: MetadataItem) => {
-    if (view === "action" || view === "id") {
+    if (view === "action" || view === "display") {
       setHighlightEditor(file);
     } else {
       setEditing(file);
@@ -630,7 +640,7 @@ export function GalleryPage() {
     highlight?: boolean;
   }) => {
     if (!editing) return;
-    if (payload.status === "id") {
+    if (payload.status === "display") {
       const requiredFilled = [
         payload.species,
         payload.plot,
@@ -640,8 +650,8 @@ export function GalleryPage() {
       ].every((val) => (val ?? "").trim() !== "");
       if (!requiredFilled || payload.id_state !== "Confirmed") {
         await requestAlert({
-          title: "ID requires confirmed metadata",
-          message: "All fields must be filled and ID State must be Confirmed before moving to ID.",
+          title: "Display requires confirmed metadata",
+          message: "All fields must be filled and ID State must be Confirmed before moving to Display.",
         });
         return;
       }
@@ -663,7 +673,9 @@ export function GalleryPage() {
       }
     }
     const nextHighlight = payload.status === "action";
-    const nextDisplay = payload.displayState || (nextHighlight ? "Active" : "Showcase");
+    const nextDisplay =
+      payload.displayState ||
+      (nextHighlight ? "Active" : payload.status === "display" ? "Showcase" : "Showcase");
     const sendHighlight =
       payload.highlight !== undefined ? payload.highlight : nextHighlight ? true : undefined;
 
@@ -681,6 +693,7 @@ export function GalleryPage() {
           id_state: payload.id_state,
           highlight: sendHighlight,
           displayState: nextDisplay,
+          stage: payload.status,
         }),
       });
 
@@ -694,6 +707,7 @@ export function GalleryPage() {
         ...payload,
         highlight: sendHighlight ?? editing.highlight,
         displayState,
+        stage: payload.status,
         updatedAt: new Date().toISOString(),
       });
       setEditing((prev) =>
@@ -715,8 +729,8 @@ export function GalleryPage() {
     { bg: string; text: string; label: string }
   > = {
     draft: { bg: "bg-slate-700", text: "text-white", label: "Draft" },
-    done: { bg: "bg-amber-400", text: "text-black", label: "Done" },
-    id: { bg: "bg-green-500", text: "text-black", label: "ID" },
+    id: { bg: "bg-amber-400", text: "text-black", label: "ID" },
+    display: { bg: "bg-green-500", text: "text-black", label: "Display" },
     action: { bg: "bg-blue-500", text: "text-black", label: "Action" },
   };
 
@@ -808,10 +822,9 @@ export function GalleryPage() {
   return (
     <div className="flex flex-col w-full h-full bg-neutral-950 text-white">
       <main className="flex flex-col flex-1 h-full px-4 sm:px-6 md:px-8 lg:px-10 py-8 items-center overflow-y-auto custom-scroll">
-        <div className="w-full max-w-7xl">
+        <div className="w-full max-w-6xl sm:max-w-7xl lg:max-w-[1400px]">
           <div className="mb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold">Gallery</h1>
               <p className="text-slate-400 text-sm">
                 {loading
                   ? "Loading..."
@@ -845,6 +858,7 @@ export function GalleryPage() {
                   <EditPane
                     file={editing}
                     bucket={BUCKET_NAME}
+                    currentView={view}
                     uniqueValues={uniqueValues}
                     onClose={() => setEditing(null)}
                     onSave={handleSaveEdit}

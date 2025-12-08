@@ -11,6 +11,7 @@ export type MetadataItem = {
   updatedAt?: string;
   highlight?: boolean;
   displayState?: string;
+  stage?: "draft" | "id" | "display" | "action";
   trimStartSec?: number;
   trimEndSec?: number;
   id_state?: string;

@@ -83,6 +83,7 @@ export async function saveMetadata(req: Request, res: Response): Promise<void> {
       highlightThumbnailId,
       id_state,
       highlightFileId,
+      stage,
     } = req.body as Record<string, any>;
 
     if (!fileId) {
@@ -101,6 +102,7 @@ export async function saveMetadata(req: Request, res: Response): Promise<void> {
       experiencePoint,
       highlight: highlight ?? false,
       displayState: displayState ?? "Inactive",
+      stage: stage ?? "draft",
       trimStartSec,
       trimEndSec,
       highlightThumbnailId,
@@ -184,6 +186,7 @@ export async function updateMetadata(req: Request, res: Response): Promise<void>
       highlightThumbnailId,
       id_state,
       highlightFileId,
+      stage,
     } = req.body as Record<string, any>;
 
     if (!fileId) {
@@ -204,6 +207,7 @@ export async function updateMetadata(req: Request, res: Response): Promise<void>
       highlightThumbnailId,
       id_state,
       highlightFileId,
+      stage,
       updatedAt: new Date().toISOString(),
     };
 
@@ -290,6 +294,43 @@ export async function saveHighlightAsset(req: Request, res: Response): Promise<v
       if (value !== undefined) {
         highlightItem[key] = value;
       }
+    }
+
+    // Delete previous highlight assets if we're replacing them
+    try {
+      const current = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: { fileId: sourceFileId } }));
+      const prevHighlightFileId = (current.Item as any)?.highlightFileId as string | undefined;
+      const prevHighlightThumbnailId = (current.Item as any)?.highlightThumbnailId as string | undefined;
+      const targetBucket = (process.env.AWS_HIGHLIGHT_BUCKET as string) || (process.env.AWS_BUCKET as string);
+      if (!targetBucket) {
+        throw new Error("Missing target bucket configuration");
+      }
+      const deleteOps: Array<Promise<any>> = [];
+      if (prevHighlightFileId && prevHighlightFileId !== highlightFileId) {
+        deleteOps.push(
+          s3
+            .deleteObject({
+              Bucket: targetBucket,
+              Key: prevHighlightFileId,
+            })
+            .promise()
+        );
+      }
+      if (prevHighlightThumbnailId && prevHighlightThumbnailId !== highlightThumbnailId) {
+        deleteOps.push(
+          s3
+            .deleteObject({
+              Bucket: targetBucket,
+              Key: prevHighlightThumbnailId,
+            })
+            .promise()
+        );
+      }
+      if (deleteOps.length) {
+        await Promise.allSettled(deleteOps);
+      }
+    } catch (cleanupErr) {
+      console.warn("Highlight cleanup failed or skipped:", cleanupErr);
     }
 
     // Only write a separate highlight record if the highlight table differs from the base table.

@@ -297,7 +297,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   const handleRevertToDone = async () => {
     if (!file.fileId) return;
     const confirmed = await requestConfirm({
-      title: "Revert to Done?",
+      title: "Revert to Display?",
       message: "This will delete the highlight video and thumbnail and move the item back to Done.",
       confirmLabel: "Yes, revert",
       cancelLabel: "Cancel",
@@ -528,7 +528,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                   onChange={(e) => setReplaceVideo(e.target.checked)}
                   className="w-4 h-4 accent-lime-400"
                 />
-                Replace trimmed video (keeps current if unchecked)
+                Replace trimmed video
               </label>
 
               <label className="flex items-center gap-3 text-slate-200 text-sm">

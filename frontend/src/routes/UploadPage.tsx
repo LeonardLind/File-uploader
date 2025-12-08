@@ -11,7 +11,7 @@ export function UploadPage() {
   const [uploadingAll, setUploadingAll] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL;
-  const BUCKET = import.meta.env.VITE_AWS_BUCKET;
+ 
 
   const unsaved = useMemo(() => images.filter((img) => !img.saved), [images]);
 
