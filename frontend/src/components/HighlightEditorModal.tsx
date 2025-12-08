@@ -469,20 +469,14 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                     {reverting ? "Reverting..." : "Revert to Done"}
                   </button>
                 )}
-                <button
-                  onClick={handleSaveClick}
-                  disabled={saving}
-                  className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60"
-                >
-                  {saving ? "Saving..." : "Save highlight"}
-                </button>
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
-                >
-                  Cancel
-                </button>
-              </div>
+              <button
+                onClick={handleSaveClick}
+                disabled={saving}
+                className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Save highlight"}
+              </button>
+            </div>
 
               {hasExistingHighlightAssets && (
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-1">
@@ -513,7 +507,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                   onClick={() => setShowReplacePrompt(false)}
                   className="px-3 py-1 text-sm rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
                 >
-                  Cancel
+                  Close
                 </button>
               </div>
 

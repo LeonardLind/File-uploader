@@ -3,9 +3,7 @@ type ConfirmDialogProps = {
   title: string;
   message: string;
   confirmLabel?: string;
-  cancelLabel?: string;
   tone?: "danger" | "info";
-  hideCancel?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -15,9 +13,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
   tone = "info",
-  hideCancel = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -47,14 +43,6 @@ export function ConfirmDialog({
         <p className="text-slate-300 text-sm leading-relaxed">{message}</p>
 
         <div className="flex justify-end gap-3 pt-1">
-          {!hideCancel && (
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
-            >
-              {cancelLabel}
-            </button>
-          )}
           <button
             onClick={onConfirm}
             className={`px-4 py-2 rounded-md font-semibold transition ${confirmClasses}`}

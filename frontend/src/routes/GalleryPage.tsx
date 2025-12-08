@@ -360,12 +360,6 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
         >
           Save
         </button>
-        <button
-          onClick={onClose}
-          className="px-4 py-2 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
-        >
-          Cancel
-        </button>
       </div>
     </div>
   );
