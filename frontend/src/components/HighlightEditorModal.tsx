@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { MetadataItem } from "../types/gallery";
 
 type Props = {
@@ -16,6 +16,160 @@ type Props = {
     hideCancel?: boolean;
   }) => Promise<boolean>;
 };
+
+const MIN_CLIP_GAP = 0.1;
+const END_STOP_EPS = 0.05;
+
+type TimelineProps = {
+  duration: number;
+  trimStart: number;
+  trimEnd: number;
+  frameTime: number;
+  onChange: (values: { trimStart: number; trimEnd: number; frameTime: number }) => void;
+  onPreview?: (time: number) => void;
+};
+
+type HandleProps = {
+  position: string;
+  color: string;
+  label: string;
+  onPointerDown: () => void;
+};
+
+function Handle({ position, color, label, onPointerDown }: HandleProps) {
+  return (
+    <div className="absolute top-1/2 -translate-y-1/2" style={{ left: position }}>
+      <div className="flex flex-col items-center gap-1">
+        <div className="text-[10px] text-slate-300">{label}</div>
+        <div
+          className={`w-4 h-4 rounded-full border-2 border-black shadow-lg cursor-pointer -translate-x-1/2 ${color}`}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onPointerDown();
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview }: TimelineProps) {
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const [dragging, setDragging] = useState<"start" | "end" | "thumb" | null>(null);
+
+  const clampTime = useCallback((value: number) => Math.min(Math.max(value, 0), duration), [duration]);
+
+  const frameToClient = (time: number) => {
+    const bar = barRef.current;
+    if (!bar) return 0;
+    const rect = bar.getBoundingClientRect();
+    return rect.left + (time / duration) * rect.width;
+  };
+
+  const chooseHandle = (clientX: number) => {
+    const distances = [
+      { key: "start" as const, dist: Math.abs(frameToClient(trimStart) - clientX) },
+      { key: "end" as const, dist: Math.abs(frameToClient(trimEnd) - clientX) },
+      { key: "thumb" as const, dist: Math.abs(frameToClient(frameTime) - clientX) },
+    ];
+    distances.sort((a, b) => a.dist - b.dist);
+    return distances[0].key;
+  };
+
+  const updateFromClientX = useCallback(
+    (clientX: number, handle: "start" | "end" | "thumb") => {
+      const bar = barRef.current;
+      if (!bar) return;
+      const rect = bar.getBoundingClientRect();
+      const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+      const rawTime = clampTime(ratio * duration);
+
+      let nextStart = trimStart;
+      let nextEnd = trimEnd;
+      let nextFrame = frameTime;
+
+      if (handle === "start") {
+        nextStart = Math.min(rawTime, nextEnd - MIN_CLIP_GAP);
+        nextStart = clampTime(nextStart);
+        if (frameTime < nextStart) {
+          nextFrame = nextStart;
+        }
+        onPreview?.(nextStart);
+      } else if (handle === "end") {
+        nextEnd = Math.max(rawTime, nextStart + MIN_CLIP_GAP);
+        nextEnd = clampTime(nextEnd);
+        if (frameTime > nextEnd) {
+          nextFrame = nextEnd;
+        }
+        onPreview?.(nextEnd);
+      } else {
+        nextFrame = clampTime(Math.min(Math.max(rawTime, nextStart), nextEnd));
+        onPreview?.(nextFrame);
+      }
+
+      onChange({ trimStart: nextStart, trimEnd: nextEnd, frameTime: nextFrame });
+    },
+    [clampTime, duration, frameTime, onChange, onPreview, trimEnd, trimStart]
+  );
+
+  useEffect(() => {
+    if (!dragging) return;
+    const handleMove = (e: PointerEvent) => updateFromClientX(e.clientX, dragging);
+    const handleUp = () => setDragging(null);
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [dragging, updateFromClientX]);
+
+  const pct = (time: number) => `${(time / duration) * 100}%`;
+
+  const startPct = pct(trimStart);
+  const endPct = pct(trimEnd);
+  const thumbPct = pct(frameTime);
+
+  return (
+    <div className="space-y-2">
+      <div
+        ref={barRef}
+        className="relative h-16 w-full select-none"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          const handle = chooseHandle(e.clientX);
+          setDragging(handle);
+          updateFromClientX(e.clientX, handle);
+        }}
+      >
+        <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-800" />
+        <div
+          className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-lime-400/70"
+          style={{ left: startPct, right: `calc(100% - ${endPct})` }}
+        />
+
+        <Handle position={startPct} color="bg-white" label="Start" onPointerDown={() => setDragging("start")} />
+        <Handle position={endPct} color="bg-white" label="End" onPointerDown={() => setDragging("end")} />
+        <Handle position={thumbPct} color="bg-sky-300" label="Thumb" onPointerDown={() => setDragging("thumb")} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
+          Start {trimStart.toFixed(1)}s
+        </span>
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
+          End {trimEnd.toFixed(1)}s
+        </span>
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
+          Thumb {frameTime.toFixed(1)}s
+        </span>
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
+          Clip {(trimEnd - trimStart).toFixed(1)}s
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function dataUrlToBlob(dataUrl: string) {
   const [meta, content] = dataUrl.split(",");
@@ -39,11 +193,57 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   const [replaceVideo, setReplaceVideo] = useState(true);
   const [replaceThumbnail, setReplaceThumbnail] = useState(true);
   const [reverting, setReverting] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
   const videoUrl = `https://${bucket}.s3.amazonaws.com/${file.fileId}`;
   const hasExistingHighlightAssets = Boolean(file.highlightFileId || file.highlightThumbnailId);
   const existingTrimStart = file.trimStartSec ?? 0;
   const existingTrimEnd = file.trimEndSec ?? 0;
+
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      video.currentTime = trimStart;
+      void video.play();
+    } else {
+      video.pause();
+    }
+  };
+
+  const toggleFullscreen = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.();
+    } else {
+      video.requestFullscreen?.();
+    }
+  };
+
+  const handleTimelineChange = useCallback(
+    ({
+      trimStart: nextStart,
+      trimEnd: nextEnd,
+      frameTime: nextFrame,
+    }: {
+      trimStart: number;
+      trimEnd: number;
+      frameTime: number;
+    }) => {
+      setTrimStart(nextStart);
+      setTrimEnd(nextEnd);
+      setFrameTime(nextFrame);
+    },
+    []
+  );
+
+  const handlePreviewTime = useCallback((time: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = time;
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -70,17 +270,49 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
     setFramePreview(null);
   }, [file.fileId]);
 
-  const captureFrame = () => {
+  useEffect(() => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) return;
+    if (!video) return;
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
+    return () => {
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
+    };
+  }, [file.fileId]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !trimEnd || isRecording) return;
+    const handleTimeUpdate = () => {
+      if (video.currentTime >= trimEnd - END_STOP_EPS) {
+        video.pause();
+        video.currentTime = trimEnd;
+      }
+    };
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    return () => video.removeEventListener("timeupdate", handleTimeUpdate);
+  }, [isRecording, trimEnd]);
+
+  const captureFrameDataUrl = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return null;
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) return null;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-    setFramePreview(dataUrl);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  };
+
+  const captureFrame = () => {
+    const dataUrl = captureFrameDataUrl();
+    if (dataUrl) {
+      setFramePreview(dataUrl);
+    }
   };
 
   const recordTrimmedSegment = async () => {
@@ -108,10 +340,12 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
 
     return await new Promise<Blob>((resolve, reject) => {
       let stopped = false;
+      setIsRecording(true);
 
       const cleanup = () => {
         video.removeEventListener("timeupdate", handleTimeUpdate);
         capture.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+        setIsRecording(false);
       };
 
       const stopRecording = () => {
@@ -163,11 +397,16 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
       return;
     }
 
-    if (doReplaceThumbnail && !framePreview) {
+    let currentThumbnail = framePreview;
+    if (doReplaceThumbnail && !currentThumbnail) {
       // Auto-capture at current frame time if missing for any reason.
-      captureFrame();
-      if (!framePreview) {
-        setError("Unable to capture thumbnail frame. Try adjusting the thumbnail moment.");
+      currentThumbnail = captureFrameDataUrl();
+      if (currentThumbnail) {
+        setFramePreview(currentThumbnail);
+      }
+      if (!currentThumbnail) {
+        setError("Unable to capture thumbnail frame. Try adjusting the thumbnail marker on the timeline.");
+        setSaving(false);
         return;
       }
     }
@@ -213,8 +452,8 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
       let highlightThumbnailId = file.highlightThumbnailId || file.thumbnailId;
 
       if (doReplaceThumbnail) {
-        if (!framePreview) throw new Error("Capture a frame before replacing the thumbnail");
-        const blob = dataUrlToBlob(framePreview);
+        if (!currentThumbnail) throw new Error("Capture a frame before replacing the thumbnail");
+        const blob = dataUrlToBlob(currentThumbnail);
         const presignRes = await fetch(`${apiUrl}/api/upload/presign`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -374,7 +613,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
               ref={videoRef}
               src={videoUrl}
               crossOrigin="anonymous"
-              controls
+              controls={false}
               className="w-full h-[360px] lg:h-[420px] object-contain bg-black"
               onLoadedMetadata={(e) => {
                 const dur = (e.target as HTMLVideoElement).duration;
@@ -386,76 +625,68 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
               }}
             />
             <div className="p-4 space-y-4">
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-                  Start: {trimStart.toFixed(1)}s
-                </span>
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-                  End: {trimEnd.toFixed(1)}s
-                </span>
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-                  Clip: {(trimEnd - trimStart).toFixed(1)}s
-                </span>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
+                    Start: {trimStart.toFixed(1)}s
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
+                    End: {trimEnd.toFixed(1)}s
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
+                    Clip: {(trimEnd - trimStart).toFixed(1)}s
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={togglePlay}
+                    className="px-3 py-1.5 text-sm rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500"
+                  >
+                    {isPlaying ? "Pause" : "Play"}
+                  </button>
+                  <button
+                    onClick={toggleFullscreen}
+                    className="px-3 py-1.5 text-sm rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500"
+                  >
+                    Fullscreen
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="space-y-2 lg:col-span-2">
-                  <label className="text-sm text-slate-300">Thumbnail moment</label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={0}
-                      max={duration ?? Math.max(trimEnd, trimStart + 1)}
-                      step={0.1}
-                      value={frameTime}
-                      onChange={(e) => setFrameTime(Number(e.target.value))}
-                      className="flex-1"
-                    />
-                    <input
-                      type="number"
-                      className="w-24 bg-neutral-800 border border-slate-700 rounded px-2 py-1 text-sm text-white"
-                      value={frameTime}
-                      onChange={(e) => setFrameTime(Number(e.target.value))}
-                      min={0}
-                      max={duration ?? undefined}
-                      step={0.1}
-                    />
-                    <div className="flex items-center gap-2 bg-neutral-800 border border-slate-700 rounded-md px-2 py-1">
-                      {framePreview ? (
-                        <img
-                          src={framePreview}
-                          alt="Thumbnail preview"
-                          className="w-14 h-10 object-cover rounded border border-slate-700"
-                        />
-                      ) : (
-                        <div className="w-14 h-10 rounded border border-dashed border-slate-700 bg-neutral-900" />
-                      )}
-                      <span className="text-xs text-slate-300">Auto-captured</span>
-                    </div>
-                  </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-slate-300">Timeline</label>
+                  <span className="text-xs text-slate-400">
+                    Duration: {duration ? `${duration.toFixed(1)}s` : "loading..."}
+                  </span>
                 </div>
+                {duration ? (
+                  <Timeline
+                    duration={duration}
+                    trimStart={trimStart}
+                    trimEnd={trimEnd}
+                    frameTime={frameTime}
+                    onChange={handleTimelineChange}
+                    onPreview={handlePreviewTime}
+                  />
+                ) : (
+                  <p className="text-xs text-slate-400">Load the video to edit the trim and thumbnail markers.</p>
+                )}
+              </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm text-slate-300">Trim bounds</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="number"
-                      className="w-full bg-neutral-800 border border-slate-700 rounded px-2 py-2 text-sm text-white"
-                      value={trimStart}
-                      min={0}
-                      max={trimEnd || undefined}
-                      step={0.1}
-                      onChange={(e) => setTrimStart(Number(e.target.value))}
-                    />
-                    <input
-                      type="number"
-                      className="w-full bg-neutral-800 border border-slate-700 rounded px-2 py-2 text-sm text-white"
-                      value={trimEnd}
-                      min={trimStart}
-                      step={0.1}
-                      onChange={(e) => setTrimEnd(Number(e.target.value))}
-                    />
-                  </div>
+              <div className="flex items-center gap-3 bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 w-fit">
+                {framePreview ? (
+                  <img
+                    src={framePreview}
+                    alt="Thumbnail preview"
+                    className="w-16 h-12 object-cover rounded border border-slate-700"
+                  />
+                ) : (
+                  <div className="w-16 h-12 rounded border border-dashed border-slate-700 bg-neutral-900" />
+                )}
+                <div className="text-xs text-slate-200 leading-tight">
+                  <div className="font-semibold text-slate-100">Thumbnail</div>
+                  <div className="text-slate-400">Auto-captured at {frameTime.toFixed(1)}s</div>
                 </div>
               </div>
 
@@ -490,7 +721,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                     </button>
                   </div>
                   <p className="text-amber-100/80 text-xs">
-                    We’ll replace the trimmed video/thumbnail unless you opt out in the dialog.
+                    We'll replace the trimmed video/thumbnail unless you opt out in the dialog.
                   </p>
                 </div>
               )}
