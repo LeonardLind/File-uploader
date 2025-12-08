@@ -86,6 +86,8 @@ export function UploadPage() {
           sensorId: img.sensorId,
           deploymentId: img.deploymentId,
           thumbnailId: undefined,
+          displayState: "Inactive",
+          highlight: false,
         }),
       });
 

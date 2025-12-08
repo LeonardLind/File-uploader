@@ -99,8 +99,8 @@ export async function saveMetadata(req: Request, res: Response): Promise<void> {
       sensorId,
       deploymentId,
       experiencePoint,
-      highlight,
-      displayState,
+      highlight: highlight ?? false,
+      displayState: displayState ?? "Inactive",
       trimStartSec,
       trimEndSec,
       highlightThumbnailId,
@@ -267,11 +267,6 @@ export async function saveHighlightAsset(req: Request, res: Response): Promise<v
       return;
     }
 
-    if (!HIGHLIGHT_TABLE_NAME) {
-      res.status(500).json({ success: false, error: "Highlight table is not configured" });
-      return;
-    }
-
     // Build the highlight item once so we can return it even if it's the same table.
     const highlightBase = {
       highlightId: highlightFileId,
@@ -298,7 +293,7 @@ export async function saveHighlightAsset(req: Request, res: Response): Promise<v
     }
 
     // Only write a separate highlight record if the highlight table differs from the base table.
-    if (HIGHLIGHT_TABLE_NAME !== TABLE_NAME) {
+    if (HIGHLIGHT_TABLE_NAME && HIGHLIGHT_TABLE_NAME !== TABLE_NAME) {
       await ddb.send(new PutCommand({ TableName: HIGHLIGHT_TABLE_NAME, Item: highlightItem }));
     }
 

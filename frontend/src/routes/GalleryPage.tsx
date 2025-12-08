@@ -5,8 +5,8 @@ import { GalleryFilterBar } from "../components/GalleryFilterBar";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { MetadataItem } from "../types/gallery";
 
-type Status = "register" | "finish" | "action";
-type ViewFilter = "draft" | "done" | "action";
+type Status = "draft" | "done" | "id" | "action";
+type ViewFilter = "draft" | "done" | "id" | "action";
 
 type CameraAutofill = {
   plot: string;
@@ -77,7 +77,6 @@ const cameraMetadataMap: Record<string, CameraAutofill> = {
 };
 
 const REQUIRED_FIELDS: Array<keyof MetadataItem> = [
-  "species",
   "plot",
   "experiencePoint",
   "sensorId",
@@ -90,8 +89,9 @@ function isComplete(item: MetadataItem) {
 
 function deriveStatus(item: MetadataItem): Status {
   if (item.highlight) return "action";
-  if (isComplete(item)) return "finish";
-  return "register";
+  if (item.id_state === "Confirmed" && item.species) return "id";
+  if (isComplete(item)) return "done";
+  return "draft";
 }
 
 function extractCameraName(key?: string): string | null {
@@ -118,8 +118,10 @@ type EditPaneProps = {
     experiencePoint?: string;
     sensorId?: string;
     deploymentId?: string;
-    status: "done" | "action";
+    status: Status;
     id_state: string;
+    displayState?: string;
+    highlight?: boolean;
   }) => void;
   onDelete: (fileId: string) => void;
   onAlert: (title: string, message: string) => void;
@@ -131,10 +133,9 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
   const [experiencePoint, setExperiencePoint] = useState(file.experiencePoint ?? "");
   const [sensorId, setSensorId] = useState(file.sensorId ?? "");
   const [deploymentId, setDeploymentId] = useState(file.deploymentId ?? "");
-  const [status, setStatus] = useState<"done" | "action">(
-    file.highlight ? "action" : "done"
-  );
+  const [status, setStatus] = useState<Status>(deriveStatus(file));
   const [idState, setIdState] = useState(file.id_state || "Unknown");
+  const [active, setActive] = useState(file.displayState !== "Inactive");
 
   const locked = deriveStatus(file) === "action";
   const allFieldsFilled = [species, plot, experiencePoint, sensorId, deploymentId].every(
@@ -148,8 +149,9 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
     setExperiencePoint(file.experiencePoint ?? "");
     setSensorId(file.sensorId ?? "");
     setDeploymentId(file.deploymentId ?? "");
-    setStatus(file.highlight ? "action" : "done");
+    setStatus(deriveStatus(file));
     setIdState(file.id_state || "Unknown");
+    setActive(file.displayState !== "Inactive");
   }, [file]);
 
   useEffect(() => {
@@ -168,6 +170,8 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
       deploymentId,
       status,
       id_state: payloadIdState,
+      displayState: active ? "Active" : "Inactive",
+      highlight: status === "action",
     });
   };
 
@@ -207,15 +211,17 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-400">Status</label>
+          <label className="text-xs text-slate-400">Stage</label>
           <select
             value={status}
             onChange={(e) => {
-              const nextStatus = e.target.value as "done" | "action";
-              if (nextStatus === "action" && !canSetAction) {
+              const nextStatus = e.target.value as Status;
+              if ((nextStatus === "id" || nextStatus === "action") && (!canSetAction || idState !== "Confirmed")) {
                 onAlert(
-                  "Action requires confirmed metadata",
-                  "All fields must be filled and ID State must be Confirmed before setting status to Action."
+                  nextStatus === "id"
+                    ? "ID requires confirmed metadata"
+                    : "Action requires confirmed metadata",
+                  "All fields must be filled and ID State must be Confirmed before moving to this stage."
                 );
                 return;
               }
@@ -223,8 +229,12 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
             }}
             className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
           >
+            <option value="draft">Draft</option>
             <option value="done">Done</option>
-            <option value="action" disabled={!canSetAction}>
+            <option value="id" disabled={!canSetAction || idState !== "Confirmed"}>
+              ID
+            </option>
+            <option value="action" disabled={!canSetAction || idState !== "Confirmed"}>
               Action
             </option>
           </select>
@@ -316,6 +326,18 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
           </select>
         </div>
       </div>
+
+      {status === "action" && (
+        <div className="flex items-center gap-3">
+          <label className="text-xs text-slate-400">Active</label>
+          <input
+            type="checkbox"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+            className="h-4 w-4 accent-lime-400"
+          />
+        </div>
+      )}
 
       <div className="flex justify-end gap-3">
         <button
@@ -447,11 +469,13 @@ export function GalleryPage() {
     const nextView = (new URLSearchParams(location.search).get("view") as ViewFilter | null) || "draft";
     setView(nextView);
     if (nextView === "done") {
-      result = result.filter((f) => deriveStatus(f) === "finish");
+      result = result.filter((f) => deriveStatus(f) === "done");
+    } else if (nextView === "id") {
+      result = result.filter((f) => deriveStatus(f) === "id");
     } else if (nextView === "action") {
       result = result.filter((f) => deriveStatus(f) === "action");
     } else {
-      result = result.filter((f) => deriveStatus(f) === "register");
+      result = result.filter((f) => deriveStatus(f) === "draft");
     }
 
     result.sort((a, b) => {
@@ -567,10 +591,30 @@ export function GalleryPage() {
   };
 
   const handleRowClick = (file: MetadataItem) => {
-    if (view === "action") {
+    if (view === "action" || view === "id") {
       setHighlightEditor(file);
     } else {
       setEditing(file);
+    }
+  };
+
+  const toggleActive = async (file: MetadataItem, active: boolean) => {
+    try {
+      const displayState = active ? "Active" : "Inactive";
+      await fetch(`${API_URL}/api/upload/metadata/update`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId: file.fileId,
+          displayState,
+        }),
+      });
+      updateLocal(file.fileId, { displayState });
+    } catch (err: unknown) {
+      requestAlert({
+        title: "Update failed",
+        message: err instanceof Error ? err.message : "Failed to update active state",
+      });
     }
   };
 
@@ -580,10 +624,28 @@ export function GalleryPage() {
     experiencePoint?: string;
     sensorId?: string;
     deploymentId?: string;
-    status: "done" | "action";
+    status: Status;
     id_state: string;
+    displayState?: string;
+    highlight?: boolean;
   }) => {
     if (!editing) return;
+    if (payload.status === "id") {
+      const requiredFilled = [
+        payload.species,
+        payload.plot,
+        payload.experiencePoint,
+        payload.sensorId,
+        payload.deploymentId,
+      ].every((val) => (val ?? "").trim() !== "");
+      if (!requiredFilled || payload.id_state !== "Confirmed") {
+        await requestAlert({
+          title: "ID requires confirmed metadata",
+          message: "All fields must be filled and ID State must be Confirmed before moving to ID.",
+        });
+        return;
+      }
+    }
     if (payload.status === "action") {
       const requiredFilled = [
         payload.species,
@@ -601,7 +663,9 @@ export function GalleryPage() {
       }
     }
     const nextHighlight = payload.status === "action";
-    const nextDisplay = nextHighlight ? "Action" : "Showcase";
+    const nextDisplay = payload.displayState || (nextHighlight ? "Active" : "Showcase");
+    const sendHighlight =
+      payload.highlight !== undefined ? payload.highlight : nextHighlight ? true : undefined;
 
     try {
       const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
@@ -615,7 +679,7 @@ export function GalleryPage() {
           sensorId: payload.sensorId,
           deploymentId: payload.deploymentId,
           id_state: payload.id_state,
-          highlight: nextHighlight,
+          highlight: sendHighlight,
           displayState: nextDisplay,
         }),
       });
@@ -625,14 +689,15 @@ export function GalleryPage() {
         throw new Error(result?.error || "Metadata update failed");
       }
 
+      const displayState = payload.displayState || nextDisplay;
       updateLocal(editing.fileId, {
         ...payload,
-        highlight: nextHighlight,
-        displayState: nextDisplay,
+        highlight: sendHighlight ?? editing.highlight,
+        displayState,
         updatedAt: new Date().toISOString(),
       });
       setEditing((prev) =>
-        prev ? { ...prev, ...payload, highlight: nextHighlight, displayState: nextDisplay } : null
+        prev ? { ...prev, ...payload, highlight: sendHighlight ?? prev.highlight, displayState } : null
       );
 
       const currentIndex = filtered.findIndex((f) => f.fileId === editing.fileId);
@@ -649,8 +714,9 @@ export function GalleryPage() {
     Status,
     { bg: string; text: string; label: string }
   > = {
-    register: { bg: "bg-slate-700", text: "text-white", label: "Register" },
-    finish: { bg: "bg-green-500", text: "text-black", label: "Finish" },
+    draft: { bg: "bg-slate-700", text: "text-white", label: "Draft" },
+    done: { bg: "bg-amber-400", text: "text-black", label: "Done" },
+    id: { bg: "bg-green-500", text: "text-black", label: "ID" },
     action: { bg: "bg-blue-500", text: "text-black", label: "Action" },
   };
 
@@ -804,6 +870,7 @@ export function GalleryPage() {
                         <th className="px-4 py-3">Deployment</th>
                         {view === "action" && <th className="px-4 py-3">Preview</th>}
                         {view === "action" && <th className="px-4 py-3">Trimmed</th>}
+                        {view === "action" && <th className="px-4 py-3">Active</th>}
                         <th className="px-4 py-3">Filename</th>
                         <th className="px-4 py-3">Updated</th>
                       </tr>
@@ -886,8 +953,20 @@ export function GalleryPage() {
                               </td>
                             )}
 
+                            {view === "action" && (
+                              <td className="px-4 py-3">
+                                <input
+                                  type="checkbox"
+                                  checked={(file.displayState || "Active") !== "Inactive"}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={(e) => toggleActive(file, e.target.checked)}
+                                  className="h-4 w-4 accent-lime-400"
+                                />
+                              </td>
+                            )}
+
                             <td className="px-4 py-3 text-slate-400 truncate max-w-[10rem]">
-                              {file.filename || "-"}
+                              {file.filename || "—"}
                             </td>
 
                             <td className="px-4 py-3 text-slate-400 whitespace-nowrap">

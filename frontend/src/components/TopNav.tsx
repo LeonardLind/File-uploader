@@ -8,7 +8,7 @@ export function TopNav() {
 
   const search = new URLSearchParams(location.search);
   const view = search.get("view") ?? "draft";
-  const activeIndex = view === "done" ? 1 : view === "action" ? 2 : 0;
+  const activeIndex = view === "done" ? 1 : view === "id" ? 2 : view === "action" ? 3 : 0;
 
   return (
     <header className="fixed top-0 left-0 w-full z-50 text-white bg-[#0f0f10]">
@@ -21,12 +21,13 @@ export function TopNav() {
           <div className="absolute left-0 right-0 bottom-0 h-[3px] bg-slate-700 z-0" />
           <div
             className="absolute bottom-0 h-[3px] bg-lime-500 rounded-full transition-transform duration-300 ease-out z-10"
-            style={{ width: "33.3333%", transform: `translateX(${activeIndex * 100}%)` }}
+            style={{ width: "25%", transform: `translateX(${activeIndex * 100}%)` }}
           />
           {[
             { label: "Draft", path: "/gallery?view=draft", i: 0 },
             { label: "Done", path: "/gallery?view=done", i: 1 },
-            { label: "Action", path: "/gallery?view=action", i: 2 },
+            { label: "ID", path: "/gallery?view=id", i: 2 },
+            { label: "Action", path: "/gallery?view=action", i: 3 },
           ].map(({ label, path, i }) => (
             <span
               key={label}
