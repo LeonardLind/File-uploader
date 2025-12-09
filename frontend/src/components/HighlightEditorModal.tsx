@@ -38,11 +38,11 @@ type HandleProps = {
 
 function Handle({ position, color, label, onPointerDown }: HandleProps) {
   return (
-    <div className="absolute top-1/2 -translate-y-1/2" style={{ left: position }}>
+    <div className="absolute top-1/2 -translate-y-[76%] -translate-x-1/2" style={{ left: position }}>
       <div className="flex flex-col items-center gap-1">
-        <div className="text-[10px] text-slate-300">{label}</div>
+        <div className="text-[12px] text-slate-100 font-semibold">{label}</div>
         <div
-          className={`w-4 h-4 rounded-full border-2 border-black shadow-lg cursor-pointer -translate-x-1/2 ${color}`}
+          className={`w-6.5 h-6 rounded-full border-2 border-black shadow-lg cursor-pointer ${color}`}
           onPointerDown={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -143,7 +143,7 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
           updateFromClientX(e.clientX, handle);
         }}
       >
-        <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-800" />
+        <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-600" />
         <div
           className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-lime-400/70"
           style={{ left: startPct, right: `calc(100% - ${endPct})` }}
@@ -151,21 +151,7 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
 
         <Handle position={startPct} color="bg-white" label="Start" onPointerDown={() => setDragging("start")} />
         <Handle position={endPct} color="bg-white" label="End" onPointerDown={() => setDragging("end")} />
-        <Handle position={thumbPct} color="bg-sky-300" label="Thumb" onPointerDown={() => setDragging("thumb")} />
-      </div>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-          Start {trimStart.toFixed(1)}s
-        </span>
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-          End {trimEnd.toFixed(1)}s
-        </span>
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-          Thumb {frameTime.toFixed(1)}s
-        </span>
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-          Clip {(trimEnd - trimStart).toFixed(1)}s
-        </span>
+        <Handle position={thumbPct} color="bg-sky-400" label="Thumb" onPointerDown={() => setDragging("thumb")} />
       </div>
     </div>
   );
@@ -619,40 +605,18 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                 const dur = (e.target as HTMLVideoElement).duration;
                 if (isFinite(dur)) {
                   setDuration(dur);
-                  if (!trimEnd) setTrimEnd(Math.max(trimStart, Math.round(dur)));
+                  let nextEnd = trimEnd;
+                  if (!nextEnd) {
+                    nextEnd = Math.max(trimStart, Math.round(dur));
+                    setTrimEnd(nextEnd);
+                  }
+                  const mid = trimStart + (nextEnd - trimStart) / 2;
+                  setFrameTime(mid);
                   captureFrame();
                 }
               }}
             />
             <div className="p-4 space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-                    Start: {trimStart.toFixed(1)}s
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-                    End: {trimEnd.toFixed(1)}s
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-slate-100">
-                    Clip: {(trimEnd - trimStart).toFixed(1)}s
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={togglePlay}
-                    className="px-3 py-1.5 text-sm rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500"
-                  >
-                    {isPlaying ? "Pause" : "Play"}
-                  </button>
-                  <button
-                    onClick={toggleFullscreen}
-                    className="px-3 py-1.5 text-sm rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500"
-                  >
-                    Fullscreen
-                  </button>
-                </div>
-              </div>
-
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-sm text-slate-300">Timeline</label>
@@ -674,40 +638,71 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                 )}
               </div>
 
-              <div className="flex items-center gap-3 bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 w-fit">
-                {framePreview ? (
-                  <img
-                    src={framePreview}
-                    alt="Thumbnail preview"
-                    className="w-16 h-12 object-cover rounded border border-slate-700"
-                  />
-                ) : (
-                  <div className="w-16 h-12 rounded border border-dashed border-slate-700 bg-neutral-900" />
-                )}
-                <div className="text-xs text-slate-200 leading-tight">
-                  <div className="font-semibold text-slate-100">Thumbnail</div>
-                  <div className="text-slate-400">Auto-captured at {frameTime.toFixed(1)}s</div>
+              <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
+                <div className="space-y-2 w-full lg:w-1/2">
+                  <div className="text-m text-slate-200 font-semibold">Thumb preview</div>
+                    {framePreview ? (
+                      <img
+                        src={framePreview}
+                        alt="Thumbnail preview"
+                        className="w-full h-62 object-cover rounded border border-slate-700"
+                      />
+                    ) : (
+                      <div className="w-full h-48 rounded border border-dashed border-slate-700 bg-neutral-900" />
+                    )}
+                </div>
+
+                <div className="flex-1 flex flex-col gap-3 w-full lg:w-1/2">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      onClick={togglePlay}
+                      className="px-5 py-3 text-base font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500"
+                    >
+                      {isPlaying ? "Pause" : "Play"}
+                    </button>
+                    <button
+                      onClick={toggleFullscreen}
+                      className="px-5 py-3 text-base font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500"
+                    >
+                      Fullscreen
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-slate-200">
+                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-slate-800 text-slate-100 font-semibold">
+                      Start {trimStart.toFixed(1)}s
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-slate-800 text-slate-100 font-semibold">
+                      End {trimEnd.toFixed(1)}s
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-slate-800 text-slate-100 font-semibold">
+                      Thumb {frameTime.toFixed(1)}s
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-slate-800 text-slate-100 font-semibold">
+                      Clip {(trimEnd - trimStart).toFixed(1)}s
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    {file.highlight && (
+                      <button
+                        onClick={handleRevertToDone}
+                        disabled={reverting}
+                        className="px-4 py-2 rounded-md bg-red-500 text-white font-semibold hover:bg-red-400 transition disabled:opacity-60"
+                      >
+                        {reverting ? "Reverting..." : "Revert to Done"}
+                      </button>
+                    )}
+                    <button
+                      onClick={handleSaveClick}
+                      disabled={saving}
+                      className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60"
+                    >
+                      {saving ? "Saving..." : "Save highlight"}
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              <div className="flex flex-wrap gap-3">
-                {file.highlight && (
-                  <button
-                    onClick={handleRevertToDone}
-                    disabled={reverting}
-                    className="px-4 py-2 rounded-md bg-red-500 text-white font-semibold hover:bg-red-400 transition disabled:opacity-60"
-                  >
-                    {reverting ? "Reverting..." : "Revert to Done"}
-                  </button>
-                )}
-              <button
-                onClick={handleSaveClick}
-                disabled={saving}
-                className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60"
-              >
-                {saving ? "Saving..." : "Save highlight"}
-              </button>
-            </div>
 
               {hasExistingHighlightAssets && (
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-1">
