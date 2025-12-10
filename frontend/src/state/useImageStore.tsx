@@ -5,7 +5,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-// import { generateThumbnailBlob } from "../utils/ffmpegThumbnail";
 import { generateQuickThumbnail } from "../utils/generateQuickThumbnail";
 
 export type PendingImage = {
