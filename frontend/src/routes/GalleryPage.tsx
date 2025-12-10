@@ -1,400 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { HighlightEditorModal } from "../components/HighlightEditorModal";
 import { GalleryFilterBar } from "../components/GalleryFilterBar";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { EditPane } from "../components/EditPane";
+import { Pagination } from "../components/Pagination";
+import { useMetadata } from "../hooks/useMetadata";
+import { useFilteredMetadata } from "../hooks/useFilteredMetadata";
+import { useAutofillMetadata } from "../hooks/useAutofillMetadata";
+import { useConfirmDialog } from "../hooks/useConfirmDialog";
+import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
+import { deriveStatus, type Status, type ViewFilter } from "./galleryUtils";
+import { statusStyles } from "./statusStyles";
 import type { MetadataItem } from "../types/gallery";
 
-type Status = "draft" | "id" | "done" | "display";
-type ViewFilter = "draft" | "id" | "done" | "display";
-
-type CameraAutofill = {
-  plot: string;
-  sensorId: string;
-  deploymentId: string;
-  experiencePoint: string;
-};
-
-// Generated mapping CAM001..CAM057 from project spec
-const cameraMetadataMap: Record<string, CameraAutofill> = {
-  CAM001: { plot: "Horto Alegria", experiencePoint: "XP1 - Cavidades", sensorId: "Sensor_ID_63", deploymentId: "Deployment_ID_49" },
-  CAM002: { plot: "Horto Alegria", experiencePoint: "XP1 - Cavidades", sensorId: "Sensor_ID_65", deploymentId: "Deployment_ID_51" },
-  CAM003: { plot: "Horto Alegria", experiencePoint: "XP1 - Cavidades", sensorId: "Sensor_ID_66", deploymentId: "Deployment_ID_52" },
-  CAM004: { plot: "Horto Alegria", experiencePoint: "XP1 - Cavidades", sensorId: "Sensor_ID_67", deploymentId: "Deployment_ID_53" },
-  CAM005: { plot: "Horto Alegria", experiencePoint: "XP1 - Cavidades", sensorId: "Sensor_ID_64", deploymentId: "Deployment_ID_50" },
-  CAM006: { plot: "Horto Alegria", experiencePoint: "XP2 - Intacta", sensorId: "Sensor_ID_58", deploymentId: "Deployment_ID_44" },
-  CAM007: { plot: "Horto Alegria", experiencePoint: "XP2 - Intacta", sensorId: "Sensor_ID_59", deploymentId: "Deployment_ID_45" },
-  CAM008: { plot: "Horto Alegria", experiencePoint: "XP2 - Intacta", sensorId: "Sensor_ID_60", deploymentId: "Deployment_ID_46" },
-  CAM009: { plot: "Horto Alegria", experiencePoint: "XP2 - Intacta", sensorId: "Sensor_ID_61", deploymentId: "Deployment_ID_47" },
-  CAM010: { plot: "Horto Alegria", experiencePoint: "XP2 - Intacta", sensorId: "Sensor_ID_62", deploymentId: "Deployment_ID_48" },
-  CAM011: { plot: "Horto Alegria", experiencePoint: "XP3 - Germano", sensorId: "Sensor_ID_72", deploymentId: "Deployment_ID_58" },
-  CAM012: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica rehab", sensorId: "Sensor_ID_0", deploymentId: "Deployment_ID_0" },
-  CAM013: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_4", deploymentId: "Deployment_ID_13" },
-  CAM014: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_12", deploymentId: "Deployment_ID_14" },
-  CAM015: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_18", deploymentId: "Deployment_ID_9" },
-  CAM016: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_23", deploymentId: "Deployment_ID_11" },
-  CAM017: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_27", deploymentId: "Deployment_ID_10" },
-  CAM018: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_31", deploymentId: "Deployment_ID_12" },
-  CAM019: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado Mature", sensorId: "Sensor_ID_2", deploymentId: "Deployment_ID_25" },
-  CAM020: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado Mature", sensorId: "Sensor_ID_13", deploymentId: "Deployment_ID_26" },
-  CAM021: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado Mature", sensorId: "Sensor_ID_21", deploymentId: "Deployment_ID_21" },
-  CAM022: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado Mature", sensorId: "Sensor_ID_25", deploymentId: "Deployment_ID_23" },
-  CAM023: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado Mature", sensorId: "Sensor_ID_29", deploymentId: "Deployment_ID_22" },
-  CAM024: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_3", deploymentId: "Deployment_ID_5" },
-  CAM025: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_7", deploymentId: "Deployment_ID_6" },
-  CAM026: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_9", deploymentId: "Deployment_ID_7" },
-  CAM027: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_10", deploymentId: "Deployment_ID_8" },
-  CAM028: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_17", deploymentId: "Deployment_ID_1" },
-  CAM029: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_22", deploymentId: "Deployment_ID_3" },
-  CAM030: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_27", deploymentId: "Deployment_ID_2" },
-  CAM031: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_30", deploymentId: "Deployment_ID_4" },
-  CAM032: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_4", deploymentId: "Deployment_ID_19" },
-  CAM033: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_16", deploymentId: "Deployment_ID_20" },
-  CAM034: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_20", deploymentId: "Deployment_ID_15" },
-  CAM035: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_24", deploymentId: "Deployment_ID_17" },
-  CAM036: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_28", deploymentId: "Deployment_ID_16" },
-  CAM037: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_32", deploymentId: "Deployment_ID_18" },
-  CAM038: { plot: "Gaio", experiencePoint: "XP1 Fronteira", sensorId: "Sensor_ID_54", deploymentId: "Deployment_ID_40" },
-  CAM039: { plot: "Gaio", experiencePoint: "XP1 Fronteira", sensorId: "Sensor_ID_55", deploymentId: "Deployment_ID_41" },
-  CAM040: { plot: "Gaio", experiencePoint: "XP1 Fronteira", sensorId: "Sensor_ID_56", deploymentId: "Deployment_ID_42" },
-  CAM041: { plot: "Gaio", experiencePoint: "XP1 Fronteira", sensorId: "Sensor_ID_57", deploymentId: "Deployment_ID_43" },
-  CAM042: { plot: "Gaio", experiencePoint: "XP2 Transicao", sensorId: "Sensor_ID_50", deploymentId: "Deployment_ID_36" },
-  CAM043: { plot: "Gaio", experiencePoint: "XP2 Transicao", sensorId: "Sensor_ID_51", deploymentId: "Deployment_ID_37" },
-  CAM044: { plot: "Gaio", experiencePoint: "XP2 Transicao", sensorId: "Sensor_ID_52", deploymentId: "Deployment_ID_38" },
-  CAM045: { plot: "Gaio", experiencePoint: "XP2 Transicao", sensorId: "Sensor_ID_53", deploymentId: "Deployment_ID_39" },
-  CAM046: { plot: "Gaio", experiencePoint: "XP3 Crescimento", sensorId: "Sensor_ID_41", deploymentId: "Deployment_ID_32" },
-  CAM047: { plot: "Gaio", experiencePoint: "XP3 Crescimento", sensorId: "Sensor_ID_42", deploymentId: "Deployment_ID_33" },
-  CAM048: { plot: "Gaio", experiencePoint: "XP3 Crescimento", sensorId: "Sensor_ID_43", deploymentId: "Deployment_ID_34" },
-  CAM049: { plot: "Gaio", experiencePoint: "XP3 Crescimento", sensorId: "Sensor_ID_49", deploymentId: "Deployment_ID_35" },
-  CAM050: { plot: "Gaio", experiencePoint: "XP4 Independente", sensorId: "Sensor_ID_37", deploymentId: "Deployment_ID_28" },
-  CAM051: { plot: "Gaio", experiencePoint: "XP4 Independente", sensorId: "Sensor_ID_38", deploymentId: "Deployment_ID_29" },
-  CAM052: { plot: "Gaio", experiencePoint: "XP4 Independente", sensorId: "Sensor_ID_39", deploymentId: "Deployment_ID_30" },
-  CAM053: { plot: "Gaio", experiencePoint: "XP4 Independente", sensorId: "Sensor_ID_40", deploymentId: "Deployment_ID_31" },
-  CAM054: { plot: "Gaio", experiencePoint: "XP5 Selvageria", sensorId: "Sensor_ID_68", deploymentId: "Deployment_ID_54" },
-  CAM055: { plot: "Gaio", experiencePoint: "XP5 Selvageria", sensorId: "Sensor_ID_69", deploymentId: "Deployment_ID_55" },
-  CAM056: { plot: "Gaio", experiencePoint: "XP5 Selvageria", sensorId: "Sensor_ID_70", deploymentId: "Deployment_ID_56" },
-  CAM057: { plot: "Gaio", experiencePoint: "XP5 Selvageria", sensorId: "Sensor_ID_71", deploymentId: "Deployment_ID_57" },
-};
-
-const REQUIRED_FIELDS: Array<keyof MetadataItem> = [
-  "plot",
-  "experiencePoint",
-  "sensorId",
-  "deploymentId",
-];
-
-function isComplete(item: MetadataItem) {
-  return REQUIRED_FIELDS.every((key) => Boolean(item[key]));
-}
-
-function normalizeStage(stage?: string | null): Status | null {
-  if (!stage) return null;
-  if (stage === "action") return "display";
-  if (stage === "display") return "done";
-  if (stage === "done" || stage === "id" || stage === "draft") return stage;
-  return null;
-}
-
-function deriveStatus(item: MetadataItem): Status {
-  if (item.highlight) return "display";
-  const normalizedStage = normalizeStage(item.stage);
-  if (normalizedStage) return normalizedStage;
-  if (item.id_state === "Confirmed" && item.species) return "done";
-  if (isComplete(item)) return "id";
-  return "draft";
-}
-
-function extractCameraName(key?: string): string | null {
-  if (!key) return null;
-  const base = key.split("/").pop() ?? key;
-  const match = base.match(/(CAM\d{3})/i);
-  return match ? match[1].toUpperCase() : null;
-}
-
-type EditPaneProps = {
-  file: MetadataItem;
-  bucket: string;
-  uniqueValues: {
-    species: string[];
-    plot: string[];
-    experiencePoint: string[];
-    sensorId: string[];
-    deploymentId: string[];
-  };
-  onClose: () => void;
-  onSave: (payload: {
-    species?: string;
-    plot?: string;
-    experiencePoint?: string;
-    sensorId?: string;
-    deploymentId?: string;
-    status: Status;
-    id_state: string;
-    displayState?: string;
-    highlight?: boolean;
-  }) => void;
-  onDelete: (fileId: string) => void;
-  onAlert: (title: string, message: string) => void;
-  currentView: ViewFilter;
-};
-
-function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAlert, currentView }: EditPaneProps) {
-  const defaultStage = useMemo<Status>(() => {
-    if (currentView === "draft") return "id";
-    if (currentView === "id") return "done";
-    if (currentView === "done") return "display";
-    return deriveStatus(file);
-  }, [currentView, file]);
-
-  const [species, setSpecies] = useState(file.species ?? "");
-  const [plot, setPlot] = useState(file.plot ?? "");
-  const [experiencePoint, setExperiencePoint] = useState(file.experiencePoint ?? "");
-  const [sensorId, setSensorId] = useState(file.sensorId ?? "");
-  const [deploymentId, setDeploymentId] = useState(file.deploymentId ?? "");
-  const [status, setStatus] = useState<Status>(defaultStage);
-  const [idState, setIdState] = useState(file.id_state || "Unknown");
-  const [active, setActive] = useState(file.displayState !== "Inactive");
-
-  const locked = deriveStatus(file) === "display";
-  const allFieldsFilled = [species, plot, experiencePoint, sensorId, deploymentId].every(
-    (val) => !!val && val.trim() !== ""
-  );
-  const canSetDisplayStage = idState === "Confirmed" && allFieldsFilled;
-
-  useEffect(() => {
-    setSpecies(file.species ?? "");
-    setPlot(file.plot ?? "");
-    setExperiencePoint(file.experiencePoint ?? "");
-    setSensorId(file.sensorId ?? "");
-    setDeploymentId(file.deploymentId ?? "");
-    setStatus(defaultStage);
-    setIdState(file.id_state || "Unknown");
-    setActive(file.displayState !== "Inactive");
-  }, [file, defaultStage]);
-
-  useEffect(() => {
-    if (status === "display" && !canSetDisplayStage) {
-      setStatus("done");
-    }
-  }, [status, canSetDisplayStage]);
-
-  const save = () => {
-    const payloadIdState = idState || "Unknown";
-    onSave({
-      species,
-      plot,
-      experiencePoint,
-      sensorId,
-      deploymentId,
-      status,
-      id_state: payloadIdState,
-      displayState: active ? "Active" : "Inactive",
-      highlight: status === "display",
-    });
-  };
-
-  return (
-    <div className="rounded-lg border border-slate-800 bg-neutral-900 shadow-md p-3.5 h-full flex flex-col gap-3.5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Edit metadata</h2>
-          <p className="text-slate-400 text-xs">{file.filename}</p>
-        </div>
-        <button
-          onClick={onClose}
-          className="px-3 py-1.5 text-xs rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
-        >
-          Close
-        </button>
-      </div>
-
-      <div className="bg-black rounded-lg overflow-hidden border border-slate-800">
-        <video
-          src={`https://${bucket}.s3.amazonaws.com/${file.fileId}`}
-          controls
-          className="w-full h-[220px] object-contain bg-black"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-400">Species</label>
-          <input
-            value={species}
-            onChange={(e) => setSpecies(e.target.value)}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
-            placeholder="Enter species"
-            disabled={locked}
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-400">Stage</label>
-          <select
-            value={status}
-            onChange={(e) => {
-              const nextStatus = e.target.value as Status;
-              if ((nextStatus === "done" || nextStatus === "display") && (!canSetDisplayStage || idState !== "Confirmed")) {
-                onAlert(
-                  nextStatus === "done"
-                    ? "Done requires confirmed metadata"
-                    : "Display requires confirmed metadata",
-                  "All fields must be filled and ID State must be Confirmed before moving to this stage."
-                );
-                return;
-              }
-              setStatus(nextStatus);
-            }}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
-          >
-            <option value="draft">Draft</option>
-            <option value="id">ID</option>
-            <option value="done" disabled={!canSetDisplayStage || idState !== "Confirmed"}>
-              Done
-            </option>
-            <option value="display" disabled={!canSetDisplayStage || idState !== "Confirmed"}>
-              Display
-            </option>
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-400">ID State</label>
-          <select
-            value={idState}
-            onChange={(e) => {
-              const next = e.target.value;
-              setIdState(next);
-            }}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
-          >
-            {["Unknown", "Genus", "AI ID", "Guess", "Confirmed"].map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-400">Plot</label>
-          <select
-            value={plot}
-            onChange={(e) => setPlot(e.target.value)}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
-            disabled={locked}
-          >
-            <option value="">Select plot</option>
-            {uniqueValues.plot.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-400">Experience</label>
-          <select
-            value={experiencePoint}
-            onChange={(e) => setExperiencePoint(e.target.value)}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
-            disabled={locked}
-          >
-            <option value="">Select experience</option>
-            {uniqueValues.experiencePoint.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-400">Sensor</label>
-          <select
-            value={sensorId}
-            onChange={(e) => setSensorId(e.target.value)}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
-            disabled={locked}
-          >
-            <option value="">Select sensor</option>
-            {uniqueValues.sensorId.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-400">Deployment</label>
-          <select
-            value={deploymentId}
-            onChange={(e) => setDeploymentId(e.target.value)}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
-            disabled={locked}
-          >
-            <option value="">Select deployment</option>
-            {uniqueValues.deploymentId.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {status === "display" && (
-        <div className="flex items-center gap-2.5">
-          <label className="text-xs text-slate-400">Active</label>
-          <input
-            type="checkbox"
-            checked={active}
-            onChange={(e) => setActive(e.target.checked)}
-            className="h-4 w-4 accent-lime-400"
-          />
-        </div>
-      )}
-
-      <div className="flex justify-end gap-2.5">
-        <button
-          onClick={() => onDelete(file.fileId)}
-          className="px-3.5 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 transition text-sm"
-        >
-          Delete
-        </button>
-        <button
-          onClick={save}
-          className="px-3.5 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition text-sm"
-        >
-          Save
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export function GalleryPage() {
-  const [files, setFiles] = useState<MetadataItem[]>([]);
-  const [filtered, setFiltered] = useState<MetadataItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [highlightEditor, setHighlightEditor] = useState<MetadataItem | null>(null);
   const [editing, setEditing] = useState<MetadataItem | null>(null);
-  const [view, setView] = useState<ViewFilter>("draft");
-  const [confirmState, setConfirmState] = useState<
-    | ({
-        title: string;
-        message: string;
-        confirmLabel?: string;
-        cancelLabel?: string;
-        tone?: "danger" | "info";
-        hideCancel?: boolean;
-        resolve: (value: boolean) => void;
-      })
-    | null
-  >(null);
 
   const [filters, setFilters] = useState({
     species: "",
@@ -413,46 +35,10 @@ export function GalleryPage() {
   const BUCKET_NAME = import.meta.env.VITE_AWS_BUCKET;
   const HIGHLIGHT_BUCKET = import.meta.env.VITE_AWS_HIGHLIGHT_BUCKET || BUCKET_NAME;
   const location = useLocation();
-  const autoFilledIds = useRef<Set<string>>(new Set());
-
-  const requestConfirm = (options: {
-    title: string;
-    message: string;
-    confirmLabel?: string;
-    cancelLabel?: string;
-    tone?: "danger" | "info";
-    hideCancel?: boolean;
-  }) =>
-    new Promise<boolean>((resolve) => {
-      setConfirmState({ ...options, resolve });
-    });
-
-  const requestAlert = (options: { title: string; message: string }) =>
-    requestConfirm({ ...options, confirmLabel: "OK", hideCancel: true });
-
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        const res = await fetch(`${API_URL}/api/upload/metadata`);
-        const data = await res.json();
-
-        if (!data.success) throw new Error(data.error);
-
-        const items = (data.items || []).map((item: MetadataItem) => ({
-          ...item,
-          id_state: item.id_state || "Unknown",
-          stage: normalizeStage((item as any).stage) ?? "draft",
-        }));
-        setFiles(items);
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to load metadata");
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [API_URL]);
+  const { confirmState, setConfirmState, requestConfirm, requestAlert } = useConfirmDialog();
+  const { files, setFiles, loading, error } = useMetadata(API_URL);
+  const { filtered, view } = useFilteredMetadata(files, filters, location.search);
+  useKeyboardNavigation(editing, filtered, setEditing);
 
   const uniqueValues = useMemo(() => {
     const getUnique = (key: keyof MetadataItem) =>
@@ -468,98 +54,9 @@ export function GalleryPage() {
   }, [files]);
 
   useEffect(() => {
-    let result = [...files];
-
-    Object.entries(filters).forEach(([key, value]) => {
-      if (key !== "updatedSort" && value) {
-        result = result.filter((f) => {
-          const candidate = f[key as keyof MetadataItem];
-          return typeof candidate === "string" && candidate.toLowerCase() === value.toLowerCase();
-        });
-      }
-    });
-
-    const rawView = new URLSearchParams(location.search).get("view");
-    const nextView: ViewFilter =
-      rawView === "id"
-        ? "id"
-        : rawView === "done"
-        ? "done"
-        : rawView === "display" || rawView === "action"
-        ? "display"
-        : "draft";
-    setView(nextView);
-    if (nextView === "id") {
-      result = result.filter((f) => deriveStatus(f) === "id");
-    } else if (nextView === "done") {
-      result = result.filter((f) => deriveStatus(f) === "done");
-    } else if (nextView === "display") {
-      result = result.filter((f) => deriveStatus(f) === "display");
-    } else {
-      result = result.filter((f) => deriveStatus(f) === "draft");
-    }
-
-    result.sort((a, b) => {
-      const da = new Date(a.updatedAt || 0).getTime();
-      const db = new Date(b.updatedAt || 0).getTime();
-      return filters.updatedSort === "asc" ? da - db : db - da;
-    });
-
-    setFiltered(result);
-    setCurrentPage(1);
-  }, [files, filters, location.search]);
-
-  useEffect(() => {
     setEditing(null);
     setHighlightEditor(null);
   }, [view]);
-
-  useEffect(() => {
-    async function autofillMissing() {
-      const candidates = files.filter(
-        (f) =>
-          !autoFilledIds.current.has(f.fileId) &&
-          (!f.plot || !f.sensorId || !f.deploymentId || !f.experiencePoint)
-      );
-
-      for (const file of candidates) {
-        const camera = extractCameraName(file.fileId || file.filename);
-        if (!camera) continue;
-        const meta = cameraMetadataMap[camera];
-        if (!meta) continue;
-
-        try {
-          await fetch(`${API_URL}/api/upload/metadata/update`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              fileId: file.fileId,
-              plot: meta.plot,
-              sensorId: meta.sensorId,
-              deploymentId: meta.deploymentId,
-              experiencePoint: meta.experiencePoint,
-              id_state: file.id_state || "Unknown",
-            }),
-          });
-
-          updateLocal(file.fileId, {
-            plot: meta.plot,
-            sensorId: meta.sensorId,
-            deploymentId: meta.deploymentId,
-            experiencePoint: meta.experiencePoint,
-            id_state: file.id_state || "Unknown",
-            stage: normalizeStage(file.stage) || "draft",
-            updatedAt: new Date().toISOString(),
-          });
-          autoFilledIds.current.add(file.fileId);
-        } catch (err: unknown) {
-          console.error("Autofill failed", err);
-        }
-      }
-    }
-
-    autofillMissing();
-  }, [files, API_URL]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) =>
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -578,6 +75,8 @@ export function GalleryPage() {
   const updateLocal = (fileId: string, updates: Partial<MetadataItem>) => {
     setFiles((prev) => prev.map((f) => (f.fileId === fileId ? { ...f, ...updates } : f)));
   };
+
+  useAutofillMetadata(files, updateLocal, API_URL);
 
   const handleDeleteFile = async (fileId: string) => {
     const confirmed = await requestConfirm({
@@ -736,100 +235,19 @@ export function GalleryPage() {
   }
 };
 
-  const statusStyles: Record<
-    Status,
-    { bg: string; text: string; label: string }
-  > = {
-    draft: { bg: "bg-slate-700", text: "text-white", label: "Draft" },
-    id: { bg: "bg-amber-400", text: "text-black", label: "ID" },
-    done: { bg: "bg-green-500", text: "text-black", label: "Done" },
-    display: { bg: "bg-blue-500", text: "text-black", label: "Display" },
-  };
-
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginatedItems = filtered.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     (currentPage - 1) * ITEMS_PER_PAGE + ITEMS_PER_PAGE
   );
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtered]);
+
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
-
-  const renderPageNumbers = () => {
-    const pages: (number | string)[] = [];
-    const maxVisible = 5;
-
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else if (currentPage <= 3) {
-      pages.push(1, 2, 3, 4, "...", totalPages);
-    } else if (currentPage >= totalPages - 2) {
-      pages.push(
-        1,
-        "...",
-        totalPages - 3,
-        totalPages - 2,
-        totalPages - 1,
-        totalPages
-      );
-    } else {
-      pages.push(
-        1,
-        "...",
-        currentPage - 1,
-        currentPage,
-        currentPage + 1,
-        "...",
-        totalPages
-      );
-    }
-
-    return pages.map((p, i) =>
-      typeof p === "number" ? (
-        <button
-          key={i}
-          onClick={() => goToPage(p)}
-          className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${
-            p === currentPage
-              ? "bg-lime-400 text-black"
-              : "bg-neutral-800 text-slate-200 hover:bg-neutral-700"
-          }`}
-        >
-          {p}
-        </button>
-      ) : (
-        <span key={i} className="px-2 text-slate-500 text-sm">
-          {p}
-        </span>
-      )
-    );
-  };
-
-  const selectRelative = (delta: number) => {
-    if (!editing) return;
-    const idx = filtered.findIndex((f) => f.fileId === editing.fileId);
-    if (idx === -1) return;
-    const nextIdx = idx + delta;
-    if (nextIdx >= 0 && nextIdx < filtered.length) {
-      setEditing(filtered[nextIdx]);
-    }
-  };
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (!editing) return;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        selectRelative(1);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        selectRelative(-1);
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [editing, filtered]);
 
   return (
     <div className="flex flex-col w-full h-full bg-neutral-950 text-white">
@@ -1007,33 +425,7 @@ export function GalleryPage() {
                   </table>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
-                  <button
-                    onClick={() => goToPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${
-                      currentPage === 1
-                        ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                        : "bg-neutral-800 text-slate-200 hover:bg-neutral-700"
-                    }`}
-                  >
-                    Previous
-                  </button>
-
-                  {renderPageNumbers()}
-
-                  <button
-                    onClick={() => goToPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                    className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${
-                      currentPage === totalPages
-                        ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                        : "bg-neutral-800 text-slate-200 hover:bg-neutral-700"
-                    }`}
-                  >
-                    Next
-                  </button>
-                </div>
+                <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={goToPage} />
               </div>
             </div>
           )}
@@ -1056,9 +448,7 @@ export function GalleryPage() {
         title={confirmState?.title || ""}
         message={confirmState?.message || ""}
         confirmLabel={confirmState?.confirmLabel}
-        cancelLabel={confirmState?.cancelLabel}
         tone={confirmState?.tone}
-        hideCancel={confirmState?.hideCancel}
         onConfirm={() => {
           confirmState?.resolve(true);
           setConfirmState(null);
