@@ -9,19 +9,20 @@ export function TopNav() {
   const search = new URLSearchParams(location.search);
   const view = search.get("view") ?? "draft";
   const normalizedView = view === "action" ? "display" : view;
-  const activeIndex = normalizedView === "id" ? 1 : normalizedView === "done" ? 2 : normalizedView === "display" ? 3 : 0;
+  const activeIndex =
+    normalizedView === "id" ? 1 : normalizedView === "done" ? 2 : normalizedView === "display" ? 3 : 0;
 
   return (
     <header className="fixed top-0 left-0 w-full z-50 text-white bg-[#0f0f10]">
-      <div className="max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 h-20">
+      <div className="max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 h-16">
         <div className="flex items-center gap-3">
-          <img src={greenCubesLogo} alt="Green Cubes Logo" className="h-8 sm:h-9 lg:h-10" />
+          <img src={greenCubesLogo} alt="Green Cubes Logo" className="h-7 sm:h-8 lg:h-9" />
         </div>
 
-        <nav className="relative flex items-center gap-4 sm:gap-6">
-          <div className="absolute left-0 right-0 bottom-0 h-[3px] bg-slate-700 z-0" />
+        <nav className="relative flex items-center gap-3 sm:gap-5">
+          <div className="absolute left-0 right-0 bottom-0 h-[2px] bg-slate-700 z-0" />
           <div
-            className="absolute bottom-0 h-[3px] bg-lime-500 rounded-full transition-transform duration-300 ease-out z-10"
+            className="absolute bottom-0 h-[2px] bg-lime-500 rounded-full transition-transform duration-300 ease-out z-10"
             style={{ width: "25%", transform: `translateX(${activeIndex * 100}%)` }}
           />
           {[
@@ -33,7 +34,7 @@ export function TopNav() {
             <span
               key={label}
               onClick={() => navigate(path)}
-              className={`relative z-20 uppercase cursor-pointer text-sm sm:text-base pb-1 transition ${
+              className={`relative z-20 uppercase cursor-pointer text-[13px] sm:text-sm pb-1 transition ${
                 activeIndex === i ? "text-lime-500" : "text-slate-300 hover:text-white"
               }`}
             >
@@ -46,7 +47,7 @@ export function TopNav() {
           <button
             onClick={() => navigate("/upload")}
             title="Manual upload"
-            className="flex items-center gap-2 bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 hover:border-lime-400 transition"
+            className="flex items-center gap-2 bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-1.5 hover:border-lime-400 transition text-sm"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -60,9 +61,9 @@ export function TopNav() {
                 clipRule="evenodd"
               />
             </svg>
-            <span className="text-sm text-white hidden sm:inline">Upload</span>
+            <span className="text-xs text-white hidden sm:inline">Upload</span>
           </button>
-          <img src={userIcon} alt="User Icon" className="h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12" />
+          <img src={userIcon} alt="User Icon" className="h-8 w-8 sm:h-9 sm:w-9 lg:h-10 lg:w-10" />
         </div>
       </div>
     </header>

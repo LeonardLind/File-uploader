@@ -194,15 +194,15 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
   };
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-neutral-900 shadow-md p-4 h-full flex flex-col gap-4">
+    <div className="rounded-lg border border-slate-800 bg-neutral-900 shadow-md p-3.5 h-full flex flex-col gap-3.5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-white">Edit metadata</h2>
-          <p className="text-slate-400 text-sm">{file.filename}</p>
+          <h2 className="text-lg font-semibold text-white">Edit metadata</h2>
+          <p className="text-slate-400 text-xs">{file.filename}</p>
         </div>
         <button
           onClick={onClose}
-          className="px-3 py-1.5 text-sm rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
+          className="px-3 py-1.5 text-xs rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
         >
           Close
         </button>
@@ -212,17 +212,17 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
         <video
           src={`https://${bucket}.s3.amazonaws.com/${file.fileId}`}
           controls
-          className="w-full h-[260px] object-contain bg-black"
+          className="w-full h-[220px] object-contain bg-black"
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
         <div className="flex flex-col gap-1">
           <label className="text-xs text-slate-400">Species</label>
           <input
             value={species}
             onChange={(e) => setSpecies(e.target.value)}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
+            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
             placeholder="Enter species"
             disabled={locked}
           />
@@ -245,7 +245,7 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
               }
               setStatus(nextStatus);
             }}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
+            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
           >
             <option value="draft">Draft</option>
             <option value="id">ID</option>
@@ -266,7 +266,7 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
               const next = e.target.value;
               setIdState(next);
             }}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
+            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
           >
             {["Unknown", "Genus", "AI ID", "Guess", "Confirmed"].map((opt) => (
               <option key={opt} value={opt}>
@@ -281,7 +281,7 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
           <select
             value={plot}
             onChange={(e) => setPlot(e.target.value)}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
+            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
             disabled={locked}
           >
             <option value="">Select plot</option>
@@ -298,7 +298,7 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
           <select
             value={experiencePoint}
             onChange={(e) => setExperiencePoint(e.target.value)}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
+            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
             disabled={locked}
           >
             <option value="">Select experience</option>
@@ -315,7 +315,7 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
           <select
             value={sensorId}
             onChange={(e) => setSensorId(e.target.value)}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
+            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
             disabled={locked}
           >
             <option value="">Select sensor</option>
@@ -332,7 +332,7 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
           <select
             value={deploymentId}
             onChange={(e) => setDeploymentId(e.target.value)}
-            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
+            className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2.5 py-2 text-sm text-white"
             disabled={locked}
           >
             <option value="">Select deployment</option>
@@ -346,7 +346,7 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
       </div>
 
       {status === "display" && (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <label className="text-xs text-slate-400">Active</label>
           <input
             type="checkbox"
@@ -357,16 +357,16 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
         </div>
       )}
 
-      <div className="flex justify-end gap-3">
+      <div className="flex justify-end gap-2.5">
         <button
           onClick={() => onDelete(file.fileId)}
-          className="px-4 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 transition"
+          className="px-3.5 py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 transition text-sm"
         >
           Delete
         </button>
         <button
           onClick={save}
-          className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition"
+          className="px-3.5 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition text-sm"
         >
           Save
         </button>
@@ -885,20 +885,20 @@ export function GalleryPage() {
               <div className="w-full">
                 <div className="overflow-x-auto rounded-lg border border-slate-800 bg-neutral-900 shadow-md custom-scroll">
                   <table className="min-w-full text-xs sm:text-sm text-slate-300 border-collapse">
-                    <thead className="bg-neutral-800 text-slate-100 text-left uppercase text-[10px] sm:text-xs tracking-wider">
+                    <thead className="bg-neutral-800 text-slate-100 text-left uppercase text-[10px] sm:text-xs tracking-wide">
                       <tr>
-                        <th className="px-4 py-3">Status</th>
-                        <th className="px-4 py-3">ID State</th>
-                        <th className="px-4 py-3">Species</th>
-                        <th className="px-4 py-3">Plot</th>
-                        <th className="px-4 py-3">Experience</th>
-                        <th className="px-4 py-3">Sensor</th>
-                        <th className="px-4 py-3">Deployment</th>
-                        {view === "display" && <th className="px-4 py-3">Preview</th>}
-                        {view === "display" && <th className="px-4 py-3">Trimmed</th>}
-                        {view === "display" && <th className="px-4 py-3">Active</th>}
-                        <th className="px-4 py-3">Filename</th>
-                        <th className="px-4 py-3">Updated</th>
+                        <th className="px-3 py-2">Status</th>
+                        <th className="px-3 py-2">ID State</th>
+                        <th className="px-3 py-2">Species</th>
+                        <th className="px-3 py-2">Plot</th>
+                        <th className="px-3 py-2">Experience</th>
+                        <th className="px-3 py-2">Sensor</th>
+                        <th className="px-3 py-2">Deployment</th>
+                        {view === "display" && <th className="px-3 py-2">Preview</th>}
+                        {view === "display" && <th className="px-3 py-2">Trimmed</th>}
+                        {view === "display" && <th className="px-3 py-2">Active</th>}
+                        <th className="px-3 py-2">Filename</th>
+                        <th className="px-3 py-2">Updated</th>
                       </tr>
                     </thead>
 
@@ -919,7 +919,7 @@ export function GalleryPage() {
                               isActive ? "bg-lime-400/10" : "hover:bg-neutral-800/50"
                             }`}
                           >
-                            <td className="px-4 py-3">
+                            <td className="px-3 py-2">
                               <span
                                 className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${statusStyle.bg} ${statusStyle.text}`}
                               >
@@ -927,30 +927,30 @@ export function GalleryPage() {
                               </span>
                             </td>
 
-                            <td className="px-4 py-3">
+                            <td className="px-3 py-2">
                               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-100">
                                 {file.id_state || "Unknown"}
                               </span>
                             </td>
 
-                            <td className="px-4 py-3 font-medium text-white">
+                            <td className="px-3 py-2 font-medium text-white">
                               {file.species || "—"}
                             </td>
 
-                            <td className="px-4 py-3">{file.plot || "—"}</td>
+                            <td className="px-3 py-2">{file.plot || "-"}</td>
 
-                            <td className="px-4 py-3">
+                            <td className="px-3 py-2">
                               {file.experiencePoint || "—"}
                             </td>
 
-                            <td className="px-4 py-3">{file.sensorId || "—"}</td>
+                            <td className="px-3 py-2">{file.sensorId || "—"}</td>
 
-                            <td className="px-4 py-3">
+                            <td className="px-3 py-2">
                               {file.deploymentId || "—"}
                             </td>
 
                             {view === "display" && (
-                              <td className="px-4 py-3">
+                              <td className="px-3 py-2">
                                 {file.highlightThumbnailId || file.thumbnailId ? (
                                   <img
                                     src={`https://${file.highlightThumbnailId ? HIGHLIGHT_BUCKET : BUCKET_NAME}.s3.amazonaws.com/${file.highlightThumbnailId || file.thumbnailId}`}
@@ -967,7 +967,7 @@ export function GalleryPage() {
                             )}
 
                             {view === "display" && (
-                              <td className="px-4 py-3">
+                              <td className="px-3 py-2">
                                 <input
                                   type="checkbox"
                                   checked={hasTrimmedHighlight}
@@ -980,7 +980,7 @@ export function GalleryPage() {
                             )}
 
                             {view === "display" && (
-                              <td className="px-4 py-3">
+                              <td className="px-3 py-2">
                                 <input
                                   type="checkbox"
                                   checked={(file.displayState || "Active") !== "Inactive"}
@@ -991,11 +991,11 @@ export function GalleryPage() {
                               </td>
                             )}
 
-                            <td className="px-4 py-3 text-slate-400 truncate max-w-[10rem]">
+                            <td className="px-3 py-2 text-slate-400 truncate max-w-[10rem]">
                               {file.filename || "—"}
                             </td>
 
-                            <td className="px-4 py-3 text-slate-400 whitespace-nowrap">
+                            <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
                               {file.updatedAt
                                 ? new Date(file.updatedAt).toLocaleString()
                                 : "—"}
