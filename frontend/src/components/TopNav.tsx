@@ -8,7 +8,8 @@ export function TopNav() {
 
   const search = new URLSearchParams(location.search);
   const view = search.get("view") ?? "draft";
-  const activeIndex = view === "id" ? 1 : view === "display" ? 2 : view === "action" ? 3 : 0;
+  const normalizedView = view === "action" ? "display" : view;
+  const activeIndex = normalizedView === "id" ? 1 : normalizedView === "done" ? 2 : normalizedView === "display" ? 3 : 0;
 
   return (
     <header className="fixed top-0 left-0 w-full z-50 text-white bg-[#0f0f10]">
@@ -26,8 +27,8 @@ export function TopNav() {
           {[
             { label: "Draft", path: "/gallery?view=draft", i: 0 },
             { label: "ID", path: "/gallery?view=id", i: 1 },
-            { label: "Display", path: "/gallery?view=display", i: 2 },
-            { label: "Action", path: "/gallery?view=action", i: 3 },
+            { label: "Done", path: "/gallery?view=done", i: 2 },
+            { label: "Display", path: "/gallery?view=display", i: 3 },
           ].map(({ label, path, i }) => (
             <span
               key={label}

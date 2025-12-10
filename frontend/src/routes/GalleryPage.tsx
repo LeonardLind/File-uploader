@@ -5,8 +5,8 @@ import { GalleryFilterBar } from "../components/GalleryFilterBar";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { MetadataItem } from "../types/gallery";
 
-type Status = "draft" | "id" | "display" | "action";
-type ViewFilter = "draft" | "id" | "display" | "action";
+type Status = "draft" | "id" | "done" | "display";
+type ViewFilter = "draft" | "id" | "done" | "display";
 
 type CameraAutofill = {
   plot: string;
@@ -87,10 +87,19 @@ function isComplete(item: MetadataItem) {
   return REQUIRED_FIELDS.every((key) => Boolean(item[key]));
 }
 
+function normalizeStage(stage?: string | null): Status | null {
+  if (!stage) return null;
+  if (stage === "action") return "display";
+  if (stage === "display") return "done";
+  if (stage === "done" || stage === "id" || stage === "draft") return stage;
+  return null;
+}
+
 function deriveStatus(item: MetadataItem): Status {
-  if (item.highlight) return "action";
-  if (item.stage) return item.stage as Status;
-  if (item.id_state === "Confirmed" && item.species) return "display";
+  if (item.highlight) return "display";
+  const normalizedStage = normalizeStage(item.stage);
+  if (normalizedStage) return normalizedStage;
+  if (item.id_state === "Confirmed" && item.species) return "done";
   if (isComplete(item)) return "id";
   return "draft";
 }
@@ -132,7 +141,8 @@ type EditPaneProps = {
 function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAlert, currentView }: EditPaneProps) {
   const defaultStage = useMemo<Status>(() => {
     if (currentView === "draft") return "id";
-    if (currentView === "id") return "display";
+    if (currentView === "id") return "done";
+    if (currentView === "done") return "display";
     return deriveStatus(file);
   }, [currentView, file]);
 
@@ -145,11 +155,11 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
   const [idState, setIdState] = useState(file.id_state || "Unknown");
   const [active, setActive] = useState(file.displayState !== "Inactive");
 
-  const locked = deriveStatus(file) === "action";
+  const locked = deriveStatus(file) === "display";
   const allFieldsFilled = [species, plot, experiencePoint, sensorId, deploymentId].every(
     (val) => !!val && val.trim() !== ""
   );
-  const canSetAction = idState === "Confirmed" && allFieldsFilled;
+  const canSetDisplayStage = idState === "Confirmed" && allFieldsFilled;
 
   useEffect(() => {
     setSpecies(file.species ?? "");
@@ -163,10 +173,10 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
   }, [file, defaultStage]);
 
   useEffect(() => {
-    if (status === "action" && !canSetAction) {
+    if (status === "display" && !canSetDisplayStage) {
       setStatus("done");
     }
-  }, [status, canSetAction]);
+  }, [status, canSetDisplayStage]);
 
   const save = () => {
     const payloadIdState = idState || "Unknown";
@@ -179,7 +189,7 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
       status,
       id_state: payloadIdState,
       displayState: active ? "Active" : "Inactive",
-      highlight: status === "action",
+      highlight: status === "display",
     });
   };
 
@@ -224,11 +234,11 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
             value={status}
             onChange={(e) => {
               const nextStatus = e.target.value as Status;
-              if ((nextStatus === "display" || nextStatus === "action") && (!canSetAction || idState !== "Confirmed")) {
+              if ((nextStatus === "done" || nextStatus === "display") && (!canSetDisplayStage || idState !== "Confirmed")) {
                 onAlert(
-                  nextStatus === "display"
-                    ? "Display requires confirmed metadata"
-                    : "Action requires confirmed metadata",
+                  nextStatus === "done"
+                    ? "Done requires confirmed metadata"
+                    : "Display requires confirmed metadata",
                   "All fields must be filled and ID State must be Confirmed before moving to this stage."
                 );
                 return;
@@ -239,11 +249,11 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
           >
             <option value="draft">Draft</option>
             <option value="id">ID</option>
-            <option value="display" disabled={!canSetAction || idState !== "Confirmed"}>
-              Display
+            <option value="done" disabled={!canSetDisplayStage || idState !== "Confirmed"}>
+              Done
             </option>
-            <option value="action" disabled={!canSetAction || idState !== "Confirmed"}>
-              Action
+            <option value="display" disabled={!canSetDisplayStage || idState !== "Confirmed"}>
+              Display
             </option>
           </select>
         </div>
@@ -335,7 +345,7 @@ function EditPane({ file, bucket, uniqueValues, onClose, onSave, onDelete, onAle
         </div>
       </div>
 
-      {status === "action" && (
+      {status === "display" && (
         <div className="flex items-center gap-3">
           <label className="text-xs text-slate-400">Active</label>
           <input
@@ -432,7 +442,7 @@ export function GalleryPage() {
         const items = (data.items || []).map((item: MetadataItem) => ({
           ...item,
           id_state: item.id_state || "Unknown",
-          stage: (item as any).stage || "draft",
+          stage: normalizeStage((item as any).stage) ?? "draft",
         }));
         setFiles(items);
       } catch (err: unknown) {
@@ -469,14 +479,22 @@ export function GalleryPage() {
       }
     });
 
-    const nextView = (new URLSearchParams(location.search).get("view") as ViewFilter | null) || "draft";
+    const rawView = new URLSearchParams(location.search).get("view");
+    const nextView: ViewFilter =
+      rawView === "id"
+        ? "id"
+        : rawView === "done"
+        ? "done"
+        : rawView === "display" || rawView === "action"
+        ? "display"
+        : "draft";
     setView(nextView);
     if (nextView === "id") {
       result = result.filter((f) => deriveStatus(f) === "id");
+    } else if (nextView === "done") {
+      result = result.filter((f) => deriveStatus(f) === "done");
     } else if (nextView === "display") {
       result = result.filter((f) => deriveStatus(f) === "display");
-    } else if (nextView === "action") {
-      result = result.filter((f) => deriveStatus(f) === "action");
     } else {
       result = result.filter((f) => deriveStatus(f) === "draft");
     }
@@ -530,7 +548,7 @@ export function GalleryPage() {
             deploymentId: meta.deploymentId,
             experiencePoint: meta.experiencePoint,
             id_state: file.id_state || "Unknown",
-            stage: file.stage || "draft",
+            stage: normalizeStage(file.stage) || "draft",
             updatedAt: new Date().toISOString(),
           });
           autoFilledIds.current.add(file.fileId);
@@ -595,7 +613,7 @@ export function GalleryPage() {
   };
 
   const handleRowClick = (file: MetadataItem) => {
-    if (view === "action" || view === "display") {
+    if (view === "display" || view === "done") {
       setHighlightEditor(file);
     } else {
       setEditing(file);
@@ -634,6 +652,22 @@ export function GalleryPage() {
     highlight?: boolean;
   }) => {
     if (!editing) return;
+    if (payload.status === "done") {
+      const requiredFilled = [
+        payload.species,
+        payload.plot,
+        payload.experiencePoint,
+        payload.sensorId,
+        payload.deploymentId,
+      ].every((val) => (val ?? "").trim() !== "");
+      if (!requiredFilled || payload.id_state !== "Confirmed") {
+        await requestAlert({
+          title: "Done requires confirmed metadata",
+          message: "All fields must be filled and ID State must be Confirmed before moving to Done.",
+        });
+        return;
+      }
+    }
     if (payload.status === "display") {
       const requiredFilled = [
         payload.species,
@@ -645,31 +679,15 @@ export function GalleryPage() {
       if (!requiredFilled || payload.id_state !== "Confirmed") {
         await requestAlert({
           title: "Display requires confirmed metadata",
-          message: "All fields must be filled and ID State must be Confirmed before moving to Display.",
+          message: "All fields must be filled and ID State must be Confirmed before setting status to Display.",
         });
         return;
       }
     }
-    if (payload.status === "action") {
-      const requiredFilled = [
-        payload.species,
-        payload.plot,
-        payload.experiencePoint,
-        payload.sensorId,
-        payload.deploymentId,
-      ].every((val) => (val ?? "").trim() !== "");
-      if (!requiredFilled || payload.id_state !== "Confirmed") {
-        await requestAlert({
-          title: "Action requires confirmed metadata",
-          message: "All fields must be filled and ID State must be Confirmed before setting status to Action.",
-        });
-        return;
-      }
-    }
-    const nextHighlight = payload.status === "action";
+    const nextHighlight = payload.status === "display";
     const nextDisplay =
       payload.displayState ||
-      (nextHighlight ? "Active" : payload.status === "display" ? "Showcase" : "Showcase");
+      (nextHighlight ? "Active" : payload.status === "done" ? "Showcase" : "Showcase");
     const sendHighlight =
       payload.highlight !== undefined ? payload.highlight : nextHighlight ? true : undefined;
 
@@ -724,8 +742,8 @@ export function GalleryPage() {
   > = {
     draft: { bg: "bg-slate-700", text: "text-white", label: "Draft" },
     id: { bg: "bg-amber-400", text: "text-black", label: "ID" },
-    display: { bg: "bg-green-500", text: "text-black", label: "Display" },
-    action: { bg: "bg-blue-500", text: "text-black", label: "Action" },
+    done: { bg: "bg-green-500", text: "text-black", label: "Done" },
+    display: { bg: "bg-blue-500", text: "text-black", label: "Display" },
   };
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
@@ -876,9 +894,9 @@ export function GalleryPage() {
                         <th className="px-4 py-3">Experience</th>
                         <th className="px-4 py-3">Sensor</th>
                         <th className="px-4 py-3">Deployment</th>
-                        {view === "action" && <th className="px-4 py-3">Preview</th>}
-                        {view === "action" && <th className="px-4 py-3">Trimmed</th>}
-                        {view === "action" && <th className="px-4 py-3">Active</th>}
+                        {view === "display" && <th className="px-4 py-3">Preview</th>}
+                        {view === "display" && <th className="px-4 py-3">Trimmed</th>}
+                        {view === "display" && <th className="px-4 py-3">Active</th>}
                         <th className="px-4 py-3">Filename</th>
                         <th className="px-4 py-3">Updated</th>
                       </tr>
@@ -931,7 +949,7 @@ export function GalleryPage() {
                               {file.deploymentId || "—"}
                             </td>
 
-                            {view === "action" && (
+                            {view === "display" && (
                               <td className="px-4 py-3">
                                 {file.highlightThumbnailId || file.thumbnailId ? (
                                   <img
@@ -948,7 +966,7 @@ export function GalleryPage() {
                               </td>
                             )}
 
-                            {view === "action" && (
+                            {view === "display" && (
                               <td className="px-4 py-3">
                                 <input
                                   type="checkbox"
@@ -961,7 +979,7 @@ export function GalleryPage() {
                               </td>
                             )}
 
-                            {view === "action" && (
+                            {view === "display" && (
                               <td className="px-4 py-3">
                                 <input
                                   type="checkbox"

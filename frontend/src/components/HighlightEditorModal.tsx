@@ -26,7 +26,7 @@ type TimelineProps = {
   trimEnd: number;
   frameTime: number;
   onChange: (values: { trimStart: number; trimEnd: number; frameTime: number }) => void;
-  onPreview?: (time: number) => void;
+  onPreview?: (time: number, options?: { captureFrame?: boolean }) => void;
 };
 
 type HandleProps = {
@@ -38,11 +38,11 @@ type HandleProps = {
 
 function Handle({ position, color, label, onPointerDown }: HandleProps) {
   return (
-    <div className="absolute top-1/2 -translate-y-[76%] -translate-x-1/2" style={{ left: position }}>
+    <div className="absolute top-1/2 -translate-y-[74%] -translate-x-1/2" style={{ left: position }}>
       <div className="flex flex-col items-center gap-1">
         <div className="text-[12px] text-slate-100 font-semibold">{label}</div>
         <div
-          className={`w-6.5 h-6 rounded-full border-2 border-black shadow-lg cursor-pointer ${color}`}
+          className={`w-6 h-6 rounded-full border-2 border-black shadow-lg cursor-pointer ${color}`}
           onPointerDown={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -95,17 +95,17 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
         if (frameTime < nextStart) {
           nextFrame = nextStart;
         }
-        onPreview?.(nextStart);
+        onPreview?.(nextStart, { captureFrame: false });
       } else if (handle === "end") {
         nextEnd = Math.max(rawTime, nextStart + MIN_CLIP_GAP);
         nextEnd = clampTime(nextEnd);
         if (frameTime > nextEnd) {
           nextFrame = nextEnd;
         }
-        onPreview?.(nextEnd);
+        onPreview?.(nextEnd, { captureFrame: false });
       } else {
         nextFrame = clampTime(Math.min(Math.max(rawTime, nextStart), nextEnd));
-        onPreview?.(nextFrame);
+        onPreview?.(nextFrame, { captureFrame: true });
       }
 
       onChange({ trimStart: nextStart, trimEnd: nextEnd, frameTime: nextFrame });
@@ -181,6 +181,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   const [reverting, setReverting] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const suppressFrameCaptureRef = useRef(false);
 
   const videoUrl = `https://${bucket}.s3.amazonaws.com/${file.fileId}`;
   const hasExistingHighlightAssets = Boolean(file.highlightFileId || file.highlightThumbnailId);
@@ -225,19 +226,51 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
     []
   );
 
-  const handlePreviewTime = useCallback((time: number) => {
+  const captureFrameDataUrl = () => {
     const video = videoRef.current;
-    if (!video) return;
-    video.currentTime = time;
+    if (!video || !video.videoWidth || !video.videoHeight) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  };
+
+  const captureFrame = useCallback(() => {
+    const dataUrl = captureFrameDataUrl();
+    if (dataUrl) {
+      setFramePreview(dataUrl);
+    }
   }, []);
+
+  const handlePreviewTime = useCallback(
+    (time: number, options?: { captureFrame?: boolean }) => {
+      const video = videoRef.current;
+      if (!video) return;
+      suppressFrameCaptureRef.current = options?.captureFrame === false;
+      video.currentTime = time;
+      if (options?.captureFrame !== false) {
+        captureFrame();
+      }
+    },
+    [captureFrame]
+  );
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    const handleSeeked = () => captureFrame();
+    const handleSeeked = () => {
+      if (suppressFrameCaptureRef.current) {
+        suppressFrameCaptureRef.current = false;
+        return;
+      }
+      captureFrame();
+    };
     video.addEventListener("seeked", handleSeeked);
     return () => video.removeEventListener("seeked", handleSeeked);
-  }, []);
+  }, [captureFrame]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -246,7 +279,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
     if (Math.abs(video.currentTime - frameTime) < 0.01) {
       captureFrame();
     }
-  }, [frameTime]);
+  }, [captureFrame, frameTime]);
 
   useEffect(() => {
     setShowReplacePrompt(false);
@@ -281,25 +314,6 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
     video.addEventListener("timeupdate", handleTimeUpdate);
     return () => video.removeEventListener("timeupdate", handleTimeUpdate);
   }, [isRecording, trimEnd]);
-
-  const captureFrameDataUrl = () => {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) return null;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.9);
-  };
-
-  const captureFrame = () => {
-    const dataUrl = captureFrameDataUrl();
-    if (dataUrl) {
-      setFramePreview(dataUrl);
-    }
-  };
 
   const recordTrimmedSegment = async () => {
     const video = videoRef.current;
@@ -494,7 +508,8 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
 
       onSaved({
         highlight: true,
-        displayState: "Action",
+        displayState: "Display",
+        stage: "display",
         trimStartSec: nextTrimStart,
         trimEndSec: nextTrimEnd,
         highlightThumbnailId,
@@ -522,7 +537,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   const handleRevertToDone = async () => {
     if (!file.fileId) return;
     const confirmed = await requestConfirm({
-      title: "Revert to Display?",
+      title: "Revert to Done?",
       message: "This will delete the highlight video and thumbnail and move the item back to Done.",
       confirmLabel: "Yes, revert",
       cancelLabel: "Cancel",
@@ -552,6 +567,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
       onSaved({
         highlight: false,
         displayState: "Showcase",
+        stage: "done",
         trimStartSec: undefined,
         trimEndSec: undefined,
         highlightFileId: undefined,
