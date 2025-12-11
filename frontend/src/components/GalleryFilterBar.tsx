@@ -26,8 +26,8 @@ type Props = {
 
 export function GalleryFilterBar({ filters, uniqueValues, onChange, onClear }: Props) {
   return (
-    <div className="bg-neutral-900 border border-slate-800 rounded-lg p-4 mb-8 flex flex-col md:flex-row md:flex-wrap gap-4 items-start md:items-center justify-between">
-      <div className="flex flex-wrap gap-3 flex-1 min-w-0">
+    <div className="bg-neutral-900 border border-slate-800 rounded-lg p-3 mb-8 flex flex-col md:flex-row md:flex-wrap gap-3 items-start md:items-center justify-between">
+      <div className="flex flex-wrap gap-2.5 flex-1 min-w-0">
         {((
           [
             ["species", "Species"],
@@ -42,7 +42,7 @@ export function GalleryFilterBar({ filters, uniqueValues, onChange, onClear }: P
             key={key}
             value={filters[key as keyof Filters] || ""}
             onChange={(e) => onChange(key as keyof Filters, e.target.value)}
-            className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-3 py-2 text-sm w-[8.5rem] md:w-[9rem]"
+            className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm w-[8.5rem] md:w-[9rem]"
           >
             <option value="">{label}</option>
             {uniqueValues[key as keyof UniqueValues]
@@ -58,17 +58,17 @@ export function GalleryFilterBar({ filters, uniqueValues, onChange, onClear }: P
         <select
           value={filters.updatedSort}
           onChange={(e) => onChange("updatedSort", e.target.value)}
-          className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-3 py-2 text-sm w-[10rem] md:w-[11rem]"
+          className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm w-[10rem] md:w-[11rem]"
         >
           <option value="desc">Newest first</option>
           <option value="asc">Oldest first</option>
         </select>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <button
           onClick={onClear}
-          className="px-3 py-2 text-sm rounded-md bg-slate-700 hover:bg-slate-600 transition"
+          className="px-3 py-1.5 text-sm rounded-md bg-slate-700 hover:bg-slate-600 transition"
         >
           Clear Filters
         </button>

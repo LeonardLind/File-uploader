@@ -34,9 +34,7 @@ const ImageStoreContext = createContext<ImageStoreContextType | null>(null);
 export function ImageStoreProvider({ children }: { children: ReactNode }) {
   const [images, setImages] = useState<PendingImage[]>([]);
 
-  /* -------------------------------------------------------------
-      ADD FILES
-  -------------------------------------------------------------- */
+
 async function addFiles(files: File[]) {
   const results: PendingImage[] = [];
 

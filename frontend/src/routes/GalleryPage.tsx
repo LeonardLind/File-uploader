@@ -10,9 +10,15 @@ import { useFilteredMetadata } from "../hooks/useFilteredMetadata";
 import { useAutofillMetadata } from "../hooks/useAutofillMetadata";
 import { useConfirmDialog } from "../hooks/useConfirmDialog";
 import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
-import { deriveStatus, type Status, type ViewFilter } from "./galleryUtils";
-import { statusStyles } from "./statusStyles";
+import { deriveStatus, type Status, type ViewFilter } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
+
+const statusStyles: Record<Status, { bg: string; text: string; label: string }> = {
+  draft: { bg: "bg-slate-700", text: "text-white", label: "Draft" },
+  id: { bg: "bg-amber-400", text: "text-black", label: "ID" },
+  done: { bg: "bg-green-500", text: "text-black", label: "Done" },
+  display: { bg: "bg-blue-500", text: "text-black", label: "Display" },
+};
 
 export function GalleryPage() {
   const [highlightEditor, setHighlightEditor] = useState<MetadataItem | null>(null);
@@ -251,7 +257,7 @@ export function GalleryPage() {
 
   return (
     <div className="flex flex-col w-full h-full bg-neutral-950 text-white">
-      <main className="flex flex-col flex-1 h-full px-4 sm:px-6 md:px-8 lg:px-10 py-8 items-center overflow-y-auto custom-scroll">
+      <main className="flex flex-col flex-1 h-full px-4 sm:px-6 md:px-8 lg:px-10 pt-20 pb-8 items-center overflow-y-auto custom-scroll">
         <div className="w-full max-w-6xl sm:max-w-7xl lg:max-w-[1400px]">
           <div className="mb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>

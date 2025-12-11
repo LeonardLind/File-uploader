@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { MetadataItem } from "../types/gallery";
-import { deriveStatus, type ViewFilter } from "../routes/galleryUtils";
+import { deriveStatus, type ViewFilter } from "../utils/galleryUtils";
 
 type Filters = {
   species: string;

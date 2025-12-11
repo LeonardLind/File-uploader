@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { normalizeStage } from "../routes/galleryUtils";
+import { normalizeStage } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
 
 export function useMetadata(apiUrl: string) {

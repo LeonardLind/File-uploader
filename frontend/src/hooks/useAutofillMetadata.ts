@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { cameraMetadataMap } from "../data/cameraMetadata";
-import { extractCameraName, normalizeStage } from "../routes/galleryUtils";
+import { extractCameraName, normalizeStage } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
 
 export function useAutofillMetadata(

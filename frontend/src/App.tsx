@@ -8,45 +8,36 @@ import { ImageStoreProvider } from "./state/useImageStore";
 import { TopNav } from "./components/TopNav";
 import { getFFmpeg } from "./utils/ffmpegSingleton";
 
-function PrivateRoute({ children }: { children: JSX.Element }) {
-  const isAuth = localStorage.getItem("auth") === "true";
+function PrivateRoute({ children, isAuth }: { children: JSX.Element; isAuth: boolean }) {
   return isAuth ? children : <Navigate to="/" replace />;
 }
 
 function AppContent() {
   const location = useLocation();
-  const showTopNav = location.pathname !== "/";
   const isAuth = localStorage.getItem("auth") === "true";
+  const showTopNav = isAuth && location.pathname !== "/";
 
   useEffect(() => {
+    if (!isAuth) return;
     (async () => {
       try {
-        console.log("Preloading FFmpeg...");
         await getFFmpeg();
-        console.log("FFmpeg ready for use");
       } catch (err) {
         console.error("Failed to preload FFmpeg:", err);
       }
     })();
-  }, []);
+  }, [isAuth]);
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100">
       {showTopNav && <TopNav />}
-      <main
-        className={`flex-1 flex justify-center items-start overflow-hidden bg-neutral-950 ${
-          showTopNav ? "pt-20" : "pt-0"
-        }`}
-      >
+      <main className="flex-1 flex justify-center items-start overflow-hidden bg-neutral-950">
         <Routes>
-          <Route
-            path="/"
-            element={isAuth ? <Navigate to="/gallery" replace /> : <LoginPage />}
-          />
+          <Route path="/" element={isAuth ? <Navigate to="/gallery" replace /> : <LoginPage />} />
           <Route
             path="/upload"
             element={
-              <PrivateRoute>
+              <PrivateRoute isAuth={isAuth}>
                 <UploadPage />
               </PrivateRoute>
             }
@@ -54,7 +45,7 @@ function AppContent() {
           <Route
             path="/gallery"
             element={
-              <PrivateRoute>
+              <PrivateRoute isAuth={isAuth}>
                 <GalleryPage />
               </PrivateRoute>
             }
