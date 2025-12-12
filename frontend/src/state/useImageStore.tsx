@@ -1,17 +1,11 @@
-// src/state/useImageStore.tsx
-import {
-  createContext,
-  useContext,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { generateQuickThumbnail } from "../utils/generateQuickThumbnail";
 
 export type PendingImage = {
   id: string;
   file: File;
-  previewUrl: string;          // video URL blob
-  previewImageUrl?: string;    // thumbnail image blob
+  previewUrl: string;
+  previewImageUrl?: string;
   saved: boolean;
   uploading?: boolean;
   progress?: number;
@@ -34,58 +28,44 @@ const ImageStoreContext = createContext<ImageStoreContextType | null>(null);
 export function ImageStoreProvider({ children }: { children: ReactNode }) {
   const [images, setImages] = useState<PendingImage[]>([]);
 
+  async function addFiles(files: File[]) {
+    const results: PendingImage[] = [];
 
-async function addFiles(files: File[]) {
-  const results: PendingImage[] = [];
+    for (const file of files) {
+      const id = crypto.randomUUID();
+      const previewUrl = URL.createObjectURL(file);
+      let previewImageUrl = previewUrl;
 
-  for (const file of files) {
-    const id = crypto.randomUUID();
-    const previewUrl = URL.createObjectURL(file);
+      try {
+        previewImageUrl = await generateQuickThumbnail(file);
+      } catch {
+        // Best-effort: if thumbnail generation fails, fall back to the video blob URL.
+      }
 
-    let previewImageUrl = previewUrl;
+      results.push({
+        id,
+        file,
+        previewUrl,
+        previewImageUrl,
+        saved: false,
+        uploading: false,
+        progress: 0,
+      });
+    }
 
-    try {
-      previewImageUrl = await generateQuickThumbnail(file);
-    } catch {}
-
-    results.push({
-      id,
-      file,
-      previewUrl,
-      previewImageUrl,
-      saved: false,
-      uploading: false,
-      progress: 0,
-    });
+    setImages((prev) => [...prev, ...results]);
   }
 
-  setImages((prev) => [...prev, ...results]);
-}
-
-
-  /* -------------------------------------------------------------
-      UPDATE IMAGE — with URL cleanup!
-  -------------------------------------------------------------- */
   function updateImage(id: string, data: Partial<PendingImage>) {
     setImages((prev) =>
       prev.map((img) => {
         if (img.id !== id) return img;
 
-        // 🔥 If a NEW previewImageUrl arrives → revoke the OLD one
-        if (
-          data.previewImageUrl &&
-          img.previewImageUrl &&
-          img.previewImageUrl !== data.previewImageUrl
-        ) {
+        if (data.previewImageUrl && img.previewImageUrl && img.previewImageUrl !== data.previewImageUrl) {
           URL.revokeObjectURL(img.previewImageUrl);
         }
 
-        // 🔥 If a NEW previewUrl arrives (rare) → revoke the OLD one
-        if (
-          data.previewUrl &&
-          img.previewUrl &&
-          img.previewUrl !== data.previewUrl
-        ) {
+        if (data.previewUrl && img.previewUrl && img.previewUrl !== data.previewUrl) {
           URL.revokeObjectURL(img.previewUrl);
         }
 
@@ -94,9 +74,6 @@ async function addFiles(files: File[]) {
     );
   }
 
-  /* -------------------------------------------------------------
-      REMOVE IMAGE — revoke both blob URLs
-  -------------------------------------------------------------- */
   function removeImage(id: string) {
     setImages((prev) => {
       const target = prev.find((img) => img.id === id);
@@ -113,9 +90,7 @@ async function addFiles(files: File[]) {
   }
 
   return (
-    <ImageStoreContext.Provider
-      value={{ images, addFiles, updateImage, removeImage }}
-    >
+    <ImageStoreContext.Provider value={{ images, addFiles, updateImage, removeImage }}>
       {children}
     </ImageStoreContext.Provider>
   );
@@ -123,7 +98,6 @@ async function addFiles(files: File[]) {
 
 export function useImageStore() {
   const ctx = useContext(ImageStoreContext);
-  if (!ctx)
-    throw new Error("useImageStore must be used inside <ImageStoreProvider>");
+  if (!ctx) throw new Error("useImageStore must be used inside <ImageStoreProvider>");
   return ctx;
 }
