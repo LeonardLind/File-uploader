@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { deriveStatus } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
 
 type Props = {
@@ -181,9 +182,14 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   const [replaceVideo, setReplaceVideo] = useState(true);
   const [replaceThumbnail, setReplaceThumbnail] = useState(true);
   const [reverting, setReverting] = useState(false);
+  const [revertingToId, setRevertingToId] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const suppressFrameCaptureRef = useRef(false);
+  const effectiveStage = deriveStatus(file);
+  const isDisplayStage = effectiveStage === "display";
+  const showIdActions = effectiveStage === "done";
 
   const videoUrl = `https://${bucket}.s3.amazonaws.com/${file.fileId}`;
   const hasExistingHighlightAssets = Boolean(file.highlightFileId || file.highlightThumbnailId);
@@ -528,6 +534,99 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
     }
   };
 
+  const handleRevertToId = async () => {
+    const confirmed = await requestConfirm({
+      title: "Revert to ID?",
+      message: "This will move the item back to ID and remove highlight status.",
+      confirmLabel: "Yes, revert",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+
+    setRevertingToId(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${apiUrl}/api/upload/metadata/update`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId: file.fileId,
+          stage: "id",
+          highlight: false,
+          displayState: "Showcase",
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result?.success) {
+        throw new Error(result?.error || "Failed to revert to ID");
+      }
+
+      onSaved({
+        stage: "id",
+        highlight: false,
+        displayState: "Showcase",
+        trimStartSec: undefined,
+        trimEndSec: undefined,
+        highlightFileId: undefined,
+        highlightThumbnailId: undefined,
+        updatedAt: new Date().toISOString(),
+      });
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to revert to ID");
+    } finally {
+      setRevertingToId(false);
+    }
+  };
+
+  const handleDeleteHighlight = async () => {
+    const confirmed = await requestConfirm({
+      title: "Delete highlight?",
+      message: "This will delete the highlight video/thumbnail and move the item back to Done.",
+      confirmLabel: "Delete highlight",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${apiUrl}/api/upload/highlight/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileId: file.fileId,
+          highlightFileId: file.highlightFileId,
+          highlightThumbnailId: file.highlightThumbnailId,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result?.success) {
+        throw new Error(result?.error || "Failed to delete highlight assets");
+      }
+
+      onSaved({
+        highlight: false,
+        displayState: "Showcase",
+        stage: "done",
+        trimStartSec: undefined,
+        trimEndSec: undefined,
+        highlightFileId: undefined,
+        highlightThumbnailId: undefined,
+        updatedAt: new Date().toISOString(),
+      });
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete highlight");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSaveClick = () => {
     if (hasExistingHighlightAssets) {
       setReplaceVideo(true);
@@ -587,28 +686,28 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center px-3 py-6">
-      <div className="w-full max-w-5xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-5 lg:p-6 space-y-4">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center px-2.5 sm:px-3 py-4 sm:py-6">
+      <div className="w-full max-w-5xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-3.5 md:p-4 lg:p-5 2xl:p-6 space-y-4 sm:space-y-5 max-h-[92vh] overflow-y-auto custom-scroll">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-200 uppercase tracking-wide">
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] sm:text-[11px] 2xl:text-xs font-semibold bg-slate-800 text-slate-200 uppercase tracking-wide">
               Highlight editor
             </span>
-            <h2 className="text-lg font-semibold text-white">{file.filename}</h2>
-            <p className="text-slate-400 text-sm">
+            <h2 className="text-sm sm:text-base lg:text-base 2xl:text-lg font-semibold text-white break-words">{file.filename}</h2>
+            <p className="text-slate-400 text-[11px] sm:text-sm 2xl:text-base">
               Trim, capture a thumbnail, and upload the highlight assets.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-sm rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
+            className="px-3 py-1.5 text-[11px] sm:text-sm 2xl:px-3.5 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
           >
             Close
           </button>
         </div>
 
         {error && (
-          <div className="rounded-lg border border-red-500/50 bg-red-500/10 text-red-100 text-sm px-3 py-2">
+          <div className="rounded-lg border border-red-500/50 bg-red-500/10 text-red-100 text-xs sm:text-sm px-3 py-2">
             {error}
           </div>
         )}
@@ -636,11 +735,11 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                 }
               }}
             />
-            <div className="p-4 space-y-3.5">
-              <div className="space-y-2.5">
+            <div className="p-3.5 md:p-4 space-y-3 md:space-y-3.5">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-sm text-slate-300">Timeline</label>
-                  <span className="text-xs text-slate-400">
+                  <label className="text-[12px] sm:text-sm 2xl:text-base text-slate-300">Timeline</label>
+                  <span className="text-[11px] sm:text-xs 2xl:text-sm text-slate-400">
                     Duration: {duration ? `${duration.toFixed(1)}s` : "loading..."}
                   </span>
                 </div>
@@ -662,7 +761,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                 <div className="space-y-2 w-full lg:w-1/2">
                   <div className="flex justify-center">
                     <div className="inline-flex flex-col items-start gap-2">
-                      <div className="text-sm text-slate-200 font-semibold">Thumb preview</div>
+                      <div className="text-[12px] sm:text-sm 2xl:text-base text-slate-200 font-semibold">Thumb preview</div>
                       {framePreview ? (
                         <img
                           src={framePreview}
@@ -677,11 +776,11 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                 </div>
 
                 <div className="flex-1 flex flex-col gap-2.5 w-full lg:w-1/2 items-center text-center">
-                  <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                    <button
-                      onClick={togglePlay}
-                      className="px-4 py-2.5 text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center gap-2"
-                    >
+                <div className="flex items-center justify-center gap-2.5 flex-wrap">
+                  <button
+                    onClick={togglePlay}
+                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 text-[11px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center gap-2"
+                  >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         {isPlaying ? (
                           <path
@@ -694,11 +793,11 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                         )}
                       </svg>
                       <span>{isPlaying ? "Pause" : "Play"}</span>
-                    </button>
-                    <button
-                      onClick={toggleFullscreen}
-                      className="px-4 py-2.5 text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center gap-2"
-                    >
+                  </button>
+                  <button
+                    onClick={toggleFullscreen}
+                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 text-[11px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center gap-2"
+                  >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M3 3h5v2H5v3H3V3zm9 0h5v5h-2V5h-3V3zm3 9h2v5h-5v-2h3v-3zm-7 3v2H3v-5h2v3h3z" />
                       </svg>
@@ -706,7 +805,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                     </button>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-200">
+                  <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] sm:text-xs 2xl:text-sm text-slate-200">
                     <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800 text-slate-100 font-semibold">
                       Start {trimStart.toFixed(1)}s
                     </span>
@@ -721,27 +820,45 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2.5 justify-center">
-                    {file.highlight && (
-                      <button
-                        onClick={handleRevertToDone}
-                        disabled={reverting}
-                        className="px-4 py-2 rounded-md bg-red-500 text-white font-semibold hover:bg-red-400 transition disabled:opacity-60"
-                      >
+              <div className="flex flex-wrap items-center gap-2.5 justify-center">
+                {file.highlight && (
+                  <button
+                    onClick={handleRevertToDone}
+                    disabled={reverting}
+                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md bg-red-500 text-white font-semibold hover:bg-red-400 transition disabled:opacity-60 text-[11px] sm:text-sm"
+                  >
                         {reverting ? "Reverting..." : "Revert to Done"}
                       </button>
                     )}
-                    <button
-                      onClick={handleSaveClick}
-                      disabled={saving}
-                      className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60"
-                      >
+                {showIdActions && (
+                  <button
+                    onClick={handleRevertToId}
+                    disabled={revertingToId}
+                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md bg-amber-500 text-white font-semibold hover:bg-amber-400 transition disabled:opacity-60 text-[11px] sm:text-sm"
+                  >
+                    {revertingToId ? "Reverting..." : "Revert to ID"}
+                  </button>
+                )}
+                {showIdActions && (
+                  <button
+                    onClick={handleDeleteHighlight}
+                    disabled={deleting}
+                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 transition disabled:opacity-60 text-[11px] sm:text-sm"
+                  >
+                    {deleting ? "Deleting..." : "Delete"}
+                  </button>
+                )}
+                <button
+                  onClick={handleSaveClick}
+                  disabled={saving}
+                  className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60 text-[11px] sm:text-sm"
+                  >
                         {saving ? "Saving..." : "Save highlight"}
                       </button>
                     </div>
 
                   {hasExistingHighlightAssets && (
-                    <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-100 text-xs">
+                    <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-100 text-[11px] sm:text-xs 2xl:text-sm">
                       <span className="font-semibold">Existing highlight detected</span>
                       <button
                         onClick={() => setShowReplacePrompt(true)}
@@ -759,22 +876,22 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
 
         {showReplacePrompt && (
           <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
-            <div className="bg-neutral-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-6 space-y-4">
+            <div className="bg-neutral-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-4 sm:p-5 2xl:p-6 space-y-4 max-h-[90vh] overflow-y-auto custom-scroll">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-white">Replace existing highlight?</h3>
+                <h3 className="text-sm sm:text-base 2xl:text-lg font-semibold text-white">Replace existing highlight?</h3>
                 <button
                   onClick={() => setShowReplacePrompt(false)}
-                  className="px-3 py-1 text-sm rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
+                  className="px-3 py-1 text-[11px] sm:text-sm 2xl:px-3.5 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
                 >
                   Close
                 </button>
               </div>
 
-              <p className="text-slate-400 text-sm">
+              <p className="text-slate-400 text-xs sm:text-sm 2xl:text-sm">
                 This file already has a trimmed video and/or thumbnail. Choose what to replace or keep.
               </p>
 
-              <label className="flex items-center gap-3 text-slate-200 text-sm">
+              <label className="flex items-center gap-3 text-slate-200 text-xs sm:text-sm 2xl:text-sm">
                 <input
                   type="checkbox"
                   checked={replaceVideo}
@@ -784,7 +901,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                 Replace trimmed video
               </label>
 
-              <label className="flex items-center gap-3 text-slate-200 text-sm">
+              <label className="flex items-center gap-3 text-slate-200 text-xs sm:text-sm 2xl:text-sm">
                 <input
                   type="checkbox"
                   checked={replaceThumbnail}
@@ -795,7 +912,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
               </label>
 
               {replaceThumbnail && !framePreview && (
-                <p className="text-amber-300 text-xs">
+                <p className="text-amber-300 text-[11px] sm:text-xs 2xl:text-sm">
                   Capture a frame first to replace the thumbnail.
                 </p>
               )}
@@ -803,7 +920,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowReplacePrompt(false)}
-                  className="px-4 py-2 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
+                  className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition text-[11px] sm:text-sm"
                 >
                   Go back
                 </button>
@@ -817,7 +934,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                     (!replaceVideo && !replaceThumbnail) ||
                     (replaceThumbnail && !framePreview)
                   }
-                  className="px-4 py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60"
+                  className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60 text-[11px] sm:text-sm"
                 >
                   Continue
                 </button>

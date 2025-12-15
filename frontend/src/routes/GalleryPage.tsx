@@ -257,7 +257,7 @@ export function GalleryPage() {
 
   return (
     <div className="flex flex-col w-full h-full bg-neutral-950 text-white">
-      <main className="flex flex-col flex-1 h-full px-4 sm:px-6 md:px-8 lg:px-10 pt-20 pb-8 items-center overflow-y-auto custom-scroll">
+      <main className="flex flex-col flex-1 h-full px-4 sm:px-6 md:px-8 lg:px-10 pt-20 pb-4 items-center overflow-y-auto custom-scroll">
         <div className="w-full max-w-6xl sm:max-w-7xl lg:max-w-[1400px]">
           <div className="mb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
