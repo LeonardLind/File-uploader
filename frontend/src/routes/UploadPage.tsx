@@ -3,15 +3,20 @@ import { useImageStore } from "../state/useImageStore";
 import { FileDropzone } from "../components/FileDropzone";
 import backgroundImage from "../assets/forst.png";
 
+type UploadedFile = {
+  id: string;
+  name: string;
+  progress: number;
+  done: boolean;
+  uploading?: boolean;
+};
+
 export function UploadPage() {
   const { images, updateImage } = useImageStore();
-  const [uploadedFiles, setUploadedFiles] = useState<
-    { id: string; name: string; progress: number; done: boolean; uploading?: boolean }[]
-  >([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [uploadingAll, setUploadingAll] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL;
- 
 
   const unsaved = useMemo(() => images.filter((img) => !img.saved), [images]);
 
@@ -21,7 +26,7 @@ export function UploadPage() {
   }
 
   useEffect(() => {
-    const next = unsaved.map((img) => ({
+    const next = images.map((img) => ({
       id: img.id,
       name: getFileNameFromImage(img),
       progress: img.progress ?? 0,
@@ -30,12 +35,21 @@ export function UploadPage() {
     }));
 
     setUploadedFiles(next);
-  }, [unsaved]);
+  }, [images]);
 
   const total = uploadedFiles.length;
   const done = uploadedFiles.filter((f) => f.done).length;
   const hasUploads = total > 0;
   const anyUploading = useMemo(() => uploadedFiles.some((f) => f.uploading), [uploadedFiles]);
+  const filesToRender = useMemo(() => {
+    const orderMap = new Map(uploadedFiles.map((f, idx) => [f.id, idx]));
+    return [...uploadedFiles].sort((a, b) => {
+      if (a.done === b.done) {
+        return (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0);
+      }
+      return a.done ? 1 : -1; // staged first, done later
+    });
+  }, [uploadedFiles]);
 
   async function uploadSingle(img: (typeof unsaved)[number]) {
     if (!img.file) return;
@@ -72,14 +86,12 @@ export function UploadPage() {
         xhr.send(img.file);
       });
 
-      // Persist metadata so gallery can list the file
       await fetch(`${API_URL}/api/upload/metadata`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fileId: key, // S3 key returned from presign
+          fileId: key,
           filename: img.file.name,
-          // Optional fields left empty for now; they can be edited later in Gallery
           species: img.species,
           plot: img.plot,
           experiencePoint: img.experiencePoint,
@@ -88,6 +100,7 @@ export function UploadPage() {
           thumbnailId: undefined,
           displayState: "Inactive",
           highlight: false,
+          stage: "draft",
         }),
       });
 
@@ -97,6 +110,7 @@ export function UploadPage() {
         saved: true,
         deploymentId: img.deploymentId,
         sensorId: img.sensorId,
+        stage: "draft",
       });
     } catch (err) {
       console.error("Upload error", err);
@@ -108,9 +122,7 @@ export function UploadPage() {
   async function handleUploadAll() {
     if (!unsaved.length) return;
     setUploadingAll(true);
-    for (const img of unsaved) {
-      await uploadSingle(img);
-    }
+    await Promise.all(unsaved.map((img) => uploadSingle(img)));
     setUploadingAll(false);
   }
 
@@ -121,7 +133,6 @@ export function UploadPage() {
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px]" />
 
-      {/* MAIN */}
       <main
         className="
           relative z-10 flex flex-col flex-1 items-center w-full
@@ -132,18 +143,13 @@ export function UploadPage() {
         "
       >
         <div className="w-full max-w-5xl flex flex-col items-center text-center">
-
-          {/* TITLE */}
           {!hasUploads && (
             <header className="mb-8 sm:mb-10 transition-opacity duration-300">
-              <h1 className="text-2xl sm:text-3xl font-semibold mb-2 sm:mb-3">
-                Upload Camera Trap Videos
-              </h1>
-              <p className="text-slate-300 text-xs sm:text-sm px-3">Drop your SD card here. We’ll upload directly.</p>
+              <h1 className="text-2xl sm:text-3xl font-semibold mb-2 sm:mb-3">Upload Camera Trap Videos</h1>
+              <p className="text-slate-300 text-xs sm:text-sm px-3">Drop your SD card here. We'll upload directly.</p>
             </header>
           )}
 
-          {/* DROPZONE */}
           <div
             className={`
               w-full max-w-2xl transition-all duration-500
@@ -153,33 +159,41 @@ export function UploadPage() {
             <FileDropzone compact={hasUploads} />
           </div>
 
-          {/* FILE LIST + FOOTER */}
           {hasUploads && (
             <section className="w-full max-w-2xl">
-
-              {/* LIST SCROLL HEIGHT RESPONSIVE */}
               <ul
                 className="
                   space-y-1
-                  max-h-[32vh] sm:max-h-[36vh] md:max-h-[24vh] lg:max-h-[42vh]
+                  max-h-[150px] sm:max-h-[160px] md:max-h-[170px] lg:max-h-[180px]
                   overflow-y-auto pr-2 custom-scroll
                 "
               >
-                {uploadedFiles.map((file) => (
-                  <li
-                    key={file.id}
-                    className="bg-neutral-800/90 rounded-lg p-3 sm:p-2 flex flex-col gap-1"
-                  >
-                    <div className="flex items-start justify-between text-xs sm:text-sm">
-                      <div className="text-white font-medium truncate max-w-[70%]">
-                        {file.name}
-                      </div>
+                {filesToRender.map((file) => (
+                  <li key={file.id} className="bg-neutral-800/90 rounded-lg p-3 sm:p-2 flex flex-col gap-1">
+                    <div className="flex items-start justify-between text-[11px] sm:text-xs">
+                      <div className="text-white font-medium truncate max-w-[70%]">{file.name}</div>
 
                       <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-300 whitespace-nowrap">
-                        <span className="text-lime-400 font-semibold">Staged</span>
-                        <span className="inline-block h-4 w-4 rounded-full bg-lime-400 text-neutral-900 text-[10px] font-bold leading-4 text-center">
-                          ✓
-                        </span>
+                        {file.done ? (
+                          <span className="text-lime-400 font-semibold">Done</span>
+                        ) : (
+                          <span className="text-slate-300 font-semibold">Staged</span>
+                        )}
+                        <svg
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          className="h-4 w-4"
+                        >
+                          <circle cx="12" cy="12" r="12" fill={file.done ? "#a3e635" : "#9CA3AF"} />
+                          <path
+                            d="M6 12.5l4 4 8-9"
+                            fill="none"
+                            stroke="#000000"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
                       </div>
                     </div>
 
@@ -193,10 +207,9 @@ export function UploadPage() {
                 ))}
               </ul>
 
-              {/* FOOTER ALWAYS VISIBLE */}
               <div
                 className="
-                  mt-4 sm:mt-6
+                  mt-1 sm:mt-2
                   py-3 sm:py-4 px-1
                   flex items-center justify-between text-xs sm:text-sm
                 "
@@ -215,10 +228,10 @@ export function UploadPage() {
                     bg-lime-400 text-neutral-900 font-semibold rounded-md
                     px-3 py-2
                     hover:bg-lime-300 transition text-xs sm:text-sm
-                    disabled:opacity-50 disabled:cursor-not-allowed
+                    disabled:cursor-not-allowed
                   "
                 >
-                  {anyUploading || uploadingAll ? "Uploading..." : "Upload to AWS"}
+                  {anyUploading || uploadingAll ? "Uploading..." : "Upload"}
                 </button>
               </div>
             </section>

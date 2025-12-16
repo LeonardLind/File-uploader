@@ -14,6 +14,8 @@ export type PendingImage = {
   experiencePoint?: string;
   sensorId?: string;
   deploymentId?: string;
+  stage?: string;
+  displayState?: string;
 };
 
 type ImageStoreContextType = {
