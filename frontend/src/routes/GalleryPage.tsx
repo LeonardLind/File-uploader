@@ -5,12 +5,13 @@ import { GalleryFilterBar } from "../components/GalleryFilterBar";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { EditPane } from "../components/EditPane";
 import { Pagination } from "../components/Pagination";
+import { HexLoader } from "../components/HexLoader";
 import { useMetadata } from "../hooks/useMetadata";
 import { useFilteredMetadata } from "../hooks/useFilteredMetadata";
 import { useAutofillMetadata } from "../hooks/useAutofillMetadata";
 import { useConfirmDialog } from "../hooks/useConfirmDialog";
 import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
-import { deriveStatus, type Status, type ViewFilter } from "../utils/galleryUtils";
+import { deriveStatus, type Status } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
 
 const statusStyles: Record<Status, { bg: string; text: string; label: string }> = {
@@ -23,6 +24,8 @@ const statusStyles: Record<Status, { bg: string; text: string; label: string }> 
 export function GalleryPage() {
   const [highlightEditor, setHighlightEditor] = useState<MetadataItem | null>(null);
   const [editing, setEditing] = useState<MetadataItem | null>(null);
+  const [savingMetadata, setSavingMetadata] = useState(false);
+  const [showSidebarFilters, setShowSidebarFilters] = useState(false);
 
   const [filters, setFilters] = useState({
     species: "",
@@ -35,7 +38,6 @@ export function GalleryPage() {
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 7;
 
   const API_URL = import.meta.env.VITE_API_URL;
   const BUCKET_NAME = import.meta.env.VITE_AWS_BUCKET;
@@ -45,6 +47,10 @@ export function GalleryPage() {
   const { files, setFiles, loading, error } = useMetadata(API_URL);
   const { filtered, view } = useFilteredMetadata(files, filters, location.search);
   useKeyboardNavigation(editing, filtered, setEditing);
+
+  const isSidebarLayout = view === "draft" || view === "id";
+  const useSidebarLayout = isSidebarLayout && !!editing;
+  const itemsPerPage = useSidebarLayout ? 10 : 7;
 
   const uniqueValues = useMemo(() => {
     const getUnique = (key: keyof MetadataItem) =>
@@ -62,6 +68,7 @@ export function GalleryPage() {
   useEffect(() => {
     setEditing(null);
     setHighlightEditor(null);
+    setShowSidebarFilters(false);
   }, [view]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) =>
@@ -197,6 +204,7 @@ export function GalleryPage() {
       payload.highlight !== undefined ? payload.highlight : nextHighlight ? true : undefined;
 
     try {
+      setSavingMetadata(true);
       const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -235,43 +243,51 @@ export function GalleryPage() {
       if (currentIndex >= 0 && currentIndex < filtered.length - 1) {
         setEditing(filtered[currentIndex + 1]);
       }
-  } catch (err: unknown) {
-    console.error("Failed to save metadata", err);
-    requestAlert({ title: "Save failed", message: "Please try again." });
-  }
-};
+    } catch (err: unknown) {
+      console.error("Failed to save metadata", err);
+      requestAlert({ title: "Save failed", message: "Please try again." });
+    } finally {
+      setSavingMetadata(false);
+    }
+  };
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const paginatedItems = filtered.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    (currentPage - 1) * ITEMS_PER_PAGE + ITEMS_PER_PAGE
+    (currentPage - 1) * itemsPerPage,
+    (currentPage - 1) * itemsPerPage + itemsPerPage
   );
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtered]);
+  }, [filtered, itemsPerPage]);
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
+  if (loading) {
+    return (
+      <div className="flex flex-col w-full min-h-screen bg-neutral-950 text-white">
+        <main className="flex flex-1 items-center justify-center pt-24 pb-10 px-4">
+          <HexLoader size={100} label="Preparing interface" />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col w-full h-full bg-neutral-950 text-white">
-      <main className="flex flex-col flex-1 h-full px-4 sm:px-6 md:px-8 lg:px-10 pt-20 pb-4 items-center overflow-y-auto custom-scroll">
+      <main className="flex flex-col flex-1 h-full px-4 sm:px-6 md:px-8 lg:px-10 pt-20 pb-4 items-center overflow-y-auto custom-scroll relative">
         <div className="w-full max-w-6xl sm:max-w-7xl lg:max-w-[1400px]">
           <div className="mb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <p className="text-slate-400 text-sm">
-                {loading
-                  ? "Loading..."
-                  : `${filtered.length} of ${files.length} file${
-                      files.length === 1 ? "" : "s"
-                    }`}
+                {`${filtered.length} of ${files.length} file${files.length === 1 ? "" : "s"}`}
               </p>
             </div>
           </div>
 
-          {!loading && files.length > 0 && (
+          {files.length > 0 && !editing && (
             <GalleryFilterBar
               filters={filters}
               uniqueValues={uniqueValues}
@@ -279,14 +295,71 @@ export function GalleryPage() {
               onClear={clearFilters}
             />
           )}
-          {error && (
-            <p className="text-red-400 mb-6 text-center">Error: {error}</p>
-          )}
+          {error && <p className="text-red-400 mb-6 text-center">Error: {error}</p>}
 
-          {loading ? (
-            <p className="text-slate-400 text-center">Fetching data...</p>
-          ) : filtered.length === 0 ? (
+          {filtered.length === 0 ? (
             <p className="text-slate-500 text-center">No matching results.</p>
+          ) : useSidebarLayout ? (
+            <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 lg:gap-6">
+              <aside className="bg-neutral-900 border border-slate-800 rounded-lg h-full flex flex-col shadow-md">
+                <div className="px-4 py-3 border-b border-slate-800 text-slate-200 font-semibold text-sm flex items-center justify-between gap-3">
+                  <span>Files</span>
+                  <button
+                    onClick={() => setShowSidebarFilters((prev) => !prev)}
+                    className="text-[11px] px-3 py-1.5 rounded-md border border-slate-700 text-slate-200 hover:border-lime-400 transition"
+                  >
+                    Filters
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto custom-scroll flex flex-col gap-2 px-2 pt-5 pb-2">
+                  {paginatedItems.map((item) => {
+                    const active = editing?.fileId === item.fileId;
+                    return (
+                      <button
+                        key={item.fileId}
+                        onClick={() => setEditing(item)}
+                        className={`w-full text-left px-3 py-2 text-[11px] border border-slate-800 rounded-lg transition-colors ${
+                          active
+                            ? "bg-slate-800/80 text-white border-l-4 border-lime-400"
+                            : "text-slate-200 hover:bg-neutral-800/80"
+                        }`}
+                      >
+                        <div className="truncate font-medium text-[10px] sm:text-xs">
+                          {item.filename || "(untitled)"}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {totalPages > 1 && (
+                  <div className="border-t border-slate-800 px-4 py-2 flex justify-center">
+                    <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={goToPage} />
+                  </div>
+                )}
+              </aside>
+
+              <div className="w-full">
+                {editing ? (
+                  <EditPane
+                    file={editing}
+                    bucket={BUCKET_NAME}
+                    apiUrl={API_URL}
+                    currentView={view}
+                    uniqueValues={uniqueValues}
+                    onClose={() => setEditing(null)}
+                    onSave={handleSaveEdit}
+                    onDelete={handleDeleteFile}
+                    onAlert={(title, message) => {
+                      requestAlert({ title, message });
+                    }}
+                  />
+                ) : (
+                  <div className="h-full min-h-[300px] flex items-center justify-center text-slate-400 border border-slate-800 rounded-lg bg-neutral-900">
+                    Select a file to edit
+                  </div>
+                )}
+              </div>
+            </div>
           ) : (
             <div className={editing ? "grid grid-cols-1 lg:grid-cols-2 gap-6" : "grid grid-cols-1 gap-6"}>
               {editing && (
@@ -294,6 +367,7 @@ export function GalleryPage() {
                   <EditPane
                     file={editing}
                     bucket={BUCKET_NAME}
+                    apiUrl={API_URL}
                     currentView={view}
                     uniqueValues={uniqueValues}
                     onClose={() => setEditing(null)}
@@ -331,8 +405,7 @@ export function GalleryPage() {
                         const status = deriveStatus(file);
                         const statusStyle = statusStyles[status];
                         const isActive =
-                          editing?.fileId === file.fileId ||
-                          highlightEditor?.fileId === file.fileId;
+                          editing?.fileId === file.fileId || highlightEditor?.fileId === file.fileId;
                         const hasTrimmedHighlight = Boolean(file.highlightFileId && file.highlightThumbnailId);
 
                         return (
@@ -358,20 +431,16 @@ export function GalleryPage() {
                             </td>
 
                             <td className="px-3 py-2 font-medium text-white">
-                              {file.species || "—"}
+                              {file.species || "-"}
                             </td>
 
                             <td className="px-3 py-2">{file.plot || "-"}</td>
 
-                            <td className="px-3 py-2">
-                              {file.experiencePoint || "—"}
-                            </td>
+                            <td className="px-3 py-2">{file.experiencePoint || "-"}</td>
 
-                            <td className="px-3 py-2">{file.sensorId || "—"}</td>
+                            <td className="px-3 py-2">{file.sensorId || "-"}</td>
 
-                            <td className="px-3 py-2">
-                              {file.deploymentId || "—"}
-                            </td>
+                            <td className="px-3 py-2">{file.deploymentId || "-"}</td>
 
                             {view === "display" && (
                               <td className="px-3 py-2">
@@ -416,13 +485,11 @@ export function GalleryPage() {
                             )}
 
                             <td className="px-3 py-2 text-slate-400 truncate max-w-[10rem]">
-                              {file.filename || "—"}
+                              {file.filename || "(no filename)"}
                             </td>
 
                             <td className="px-3 py-2 text-slate-400 whitespace-nowrap">
-                              {file.updatedAt
-                                ? new Date(file.updatedAt).toLocaleString()
-                                : "—"}
+                              {file.updatedAt ? new Date(file.updatedAt).toLocaleString() : "-"}
                             </td>
                           </tr>
                         );
@@ -449,6 +516,12 @@ export function GalleryPage() {
         />
       )}
 
+      {savingMetadata && (
+        <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+          <HexLoader size={88} label="Saving metadata" />
+        </div>
+      )}
+
       <ConfirmDialog
         open={Boolean(confirmState)}
         title={confirmState?.title || ""}
@@ -464,6 +537,40 @@ export function GalleryPage() {
           setConfirmState(null);
         }}
       />
+
+      {showSidebarFilters && (
+        <div className="fixed inset-0 z-[75] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="w-full max-w-4xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base sm:text-lg font-semibold text-white">Filters</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={clearFilters}
+                  className="text-[11px] sm:text-xs px-3 py-1.5 rounded-md border border-slate-700 text-slate-200 hover:border-lime-400 transition"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => setShowSidebarFilters(false)}
+                  className="text-[11px] sm:text-xs px-3 py-1.5 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-neutral-900 p-3 sm:p-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <GalleryFilterBar
+                  filters={filters}
+                  uniqueValues={uniqueValues}
+                  onChange={handleFilterChange}
+                  onClear={clearFilters}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deriveStatus } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
+import { HexLoader } from "./HexLoader";
 
 type Props = {
   file: MetadataItem;
@@ -126,7 +127,6 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
     };
   }, [dragging, updateFromClientX]);
 
-  const pct = (time: number) => `${(time / duration) * 100}%`;
   const INSET_PCT = 2;
   const insetPct = (time: number) => `${(time / duration) * (100 - INSET_PCT * 2) + INSET_PCT}%`;
 
@@ -186,9 +186,10 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   const [deleting, setDeleting] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(true);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const suppressFrameCaptureRef = useRef(false);
   const effectiveStage = deriveStatus(file);
-  const isDisplayStage = effectiveStage === "display";
   const showIdActions = effectiveStage === "done";
 
   const videoUrl = `https://${bucket}.s3.amazonaws.com/${file.fileId}`;
@@ -296,6 +297,8 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
     setReplaceThumbnail(true);
     setError(null);
     setFramePreview(null);
+    setVideoLoading(true);
+    setVideoDuration(null);
   }, [file.fileId]);
 
   useEffect(() => {
@@ -687,23 +690,58 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center px-2.5 sm:px-3 py-4 sm:py-6">
-      <div className="w-full max-w-5xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-3.5 md:p-4 lg:p-5 2xl:p-6 space-y-4 sm:space-y-5 max-h-[92vh] overflow-y-auto custom-scroll">
+      <div className="relative w-full max-w-5xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-3.5 md:p-4 lg:p-5 2xl:p-6 space-y-4 sm:space-y-5 max-h-[92vh] overflow-y-auto custom-scroll">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] sm:text-[11px] 2xl:text-xs font-semibold bg-slate-800 text-slate-200 uppercase tracking-wide">
+            <h2 className="text-sm sm:text-base lg:text-base 2xl:text-lg font-semibold text-white break-words mb-0.5">
               Highlight editor
-            </span>
-            <h2 className="text-sm sm:text-base lg:text-base 2xl:text-lg font-semibold text-white break-words">{file.filename}</h2>
-            <p className="text-slate-400 text-[11px] sm:text-sm 2xl:text-base">
-              Trim, capture a thumbnail, and upload the highlight assets.
+            </h2>
+            <p className="text-slate-300 text-[10px] sm:text-xs 2xl:text-sm break-words">
+              {file.filename}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-[11px] sm:text-sm 2xl:px-3.5 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            {showIdActions && (
+              <button
+                onClick={handleRevertToId}
+                disabled={revertingToId}
+                className="px-3 py-1.25 rounded-md border border-amber-500 text-amber-100 font-semibold hover:bg-amber-500/10 transition text-[11px] sm:text-xs disabled:opacity-60"
+              >
+                {revertingToId ? "Reverting..." : "Revert to ID"}
+              </button>
+            )}
+            {showIdActions && (
+              <button
+                onClick={handleDeleteHighlight}
+                disabled={deleting}
+                className="px-3 py-1.25 rounded-md border border-red-600 text-red-200 font-semibold hover:bg-red-600/10 transition text-[11px] sm:text-xs disabled:opacity-60"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            )}
+            {file.highlight && (
+              <button
+                onClick={handleRevertToDone}
+                disabled={reverting}
+                className="px-3 py-1.25 rounded-md border border-red-600 text-red-200 font-semibold hover:bg-red-600/10 transition text-[11px] sm:text-xs disabled:opacity-60"
+              >
+                {reverting ? "Reverting..." : "Revert to Done"}
+              </button>
+            )}
+            <button
+              onClick={handleSaveClick}
+              disabled={saving}
+              className="px-3 py-1.25 rounded-md border border-lime-500 text-lime-100 font-semibold hover:bg-lime-400/10 transition text-[11px] sm:text-xs disabled:opacity-60"
+            >
+              {saving ? "Saving..." : "Save highlight"}
+            </button>
+            <button
+              onClick={onClose}
+              className="px-3 py-1.25 text-[11px] sm:text-xs 2xl:px-3.5 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
+            >
+              Close
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -712,165 +750,151 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
           </div>
         )}
 
-        <div className="space-y-4">
-          <div className="rounded-xl border border-slate-800 bg-neutral-900 overflow-hidden">
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              crossOrigin="anonymous"
-              controls={false}
-              className="w-full h-[300px] lg:h-[360px] object-contain bg-black"
-              onLoadedMetadata={(e) => {
-                const dur = (e.target as HTMLVideoElement).duration;
-                if (isFinite(dur)) {
-                  setDuration(dur);
-                  let nextEnd = trimEnd;
-                  if (!nextEnd) {
-                    nextEnd = Math.max(trimStart, Math.round(dur));
-                    setTrimEnd(nextEnd);
-                  }
-                  const mid = trimStart + (nextEnd - trimStart) / 2;
-                  setFrameTime(mid);
-                  captureFrame();
-                }
-              }}
-            />
-            <div className="p-3.5 md:p-4 space-y-3 md:space-y-3.5">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[12px] sm:text-sm 2xl:text-base text-slate-300">Timeline</label>
-                  <span className="text-[11px] sm:text-xs 2xl:text-sm text-slate-400">
-                    Duration: {duration ? `${duration.toFixed(1)}s` : "loading..."}
-                  </span>
+        <div className="grid lg:grid-cols-[1.75fr_0.65fr] gap-2.5">
+          <div className="space-y-3">
+            <div className="rounded-xl border border-slate-800 bg-neutral-900 overflow-hidden relative">
+              {videoLoading && (
+                <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-10 pointer-events-none">
+                  <HexLoader size={70} label="Loading video" />
                 </div>
-                {duration ? (
-                  <Timeline
-                    duration={duration}
-                    trimStart={trimStart}
-                    trimEnd={trimEnd}
-                    frameTime={frameTime}
-                    onChange={handleTimelineChange}
-                    onPreview={handlePreviewTime}
+              )}
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                crossOrigin="anonymous"
+                controls={false}
+                className="w-full h-[300px] lg:h-[360px] object-contain bg-black"
+                onLoadedMetadata={(e) => {
+                  const dur = (e.target as HTMLVideoElement).duration;
+                  if (isFinite(dur)) {
+                    setVideoDuration(dur);
+                    if (dur <= 5) {
+                      setVideoLoading(false);
+                    }
+                    setDuration(dur);
+                    let nextEnd = trimEnd;
+                    if (!nextEnd) {
+                      nextEnd = Math.max(trimStart, Math.round(dur));
+                      setTrimEnd(nextEnd);
+                    }
+                    const mid = trimStart + (nextEnd - trimStart) / 2;
+                    setFrameTime(mid);
+                    captureFrame();
+                  }
+                }}
+                onTimeUpdate={(e) => {
+                  const vid = e.target as HTMLVideoElement;
+                  const dur = videoDuration ?? vid.duration;
+                  const threshold = isFinite(dur) && dur > 0 ? Math.min(5, dur) : 5;
+                  if (vid.currentTime >= threshold - 0.05) {
+                    setVideoLoading(false);
+                  }
+                }}
+                onLoadedData={(e) => {
+                  const vid = e.target as HTMLVideoElement;
+                  const dur = videoDuration ?? vid.duration;
+                  if (isFinite(dur) && dur <= 5) {
+                    setVideoLoading(false);
+                  }
+                }}
+                onError={() => setVideoLoading(false)}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-center gap-2.5 flex-wrap mt-2">
+              <button
+                onClick={togglePlay}
+                className="px-3.5 py-1.75 text-[12px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  {isPlaying ? (
+                    <path
+                      fillRule="evenodd"
+                      d="M6 4a1 1 0 00-1 1v10a1 1 0 002 0V5a1 1 0 00-1-1zm7 0a1 1 0 00-1 1v10a1 1 0 002 0V5a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  ) : (
+                    <path d="M6.5 4.75a.75.75 0 011.125-.65l7 4.25a.75.75 0 010 1.3l-7 4.25A.75.75 0 016 13.25v-7.5a.75.75 0 01.5-.7z" />
+                  )}
+                </svg>
+                <span>{isPlaying ? "Pause" : "Play"}</span>
+              </button>
+              <button
+                onClick={toggleFullscreen}
+                className="px-3.5 py-1.75 text-[12px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M3 3h5v2H5v3H3V3zm9 0h5v5h-2V5h-3V3zm3 9h2v5h-5v-2h3v-3zm-7 3v2H3v-5h2v3h3z" />
+                </svg>
+                <span>Fullscreen</span>
+              </button>
+            </div>
+
+            <div className="flex justify-center items-center gap-2">
+              <div className="inline-flex flex-col items-start gap-1.5">
+                <div className="text-[11px] sm:text-xs 2xl:text-sm text-slate-200 font-semibold">Thumb preview</div>
+                {framePreview ? (
+                  <img
+                    src={framePreview}
+                    alt="Thumbnail preview"
+                    className="h-24 w-32 max-w-full object-cover rounded border border-slate-700"
                   />
                 ) : (
-                  <p className="text-xs text-slate-400">Load the video to edit the trim and thumbnail markers.</p>
+                  <div className="w-32 h-24 rounded border border-dashed border-slate-700 bg-neutral-900" />
                 )}
               </div>
-
-              <div className="flex flex-col lg:flex-row items-start justify-between gap-5">
-                <div className="space-y-2 w-full lg:w-1/2">
-                  <div className="flex justify-center">
-                    <div className="inline-flex flex-col items-start gap-2">
-                      <div className="text-[12px] sm:text-sm 2xl:text-base text-slate-200 font-semibold">Thumb preview</div>
-                      {framePreview ? (
-                        <img
-                          src={framePreview}
-                          alt="Thumbnail preview"
-                          className="h-40 max-w-full object-cover rounded border border-slate-700"
-                        />
-                      ) : (
-                        <div className="w-[240px] h-44 rounded border border-dashed border-slate-700 bg-neutral-900" />
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-1 flex flex-col gap-2.5 w-full lg:w-1/2 items-center text-center">
-                <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                  <button
-                    onClick={togglePlay}
-                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 text-[11px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center gap-2"
-                  >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        {isPlaying ? (
-                          <path
-                            fillRule="evenodd"
-                            d="M6 4a1 1 0 00-1 1v10a1 1 0 002 0V5a1 1 0 00-1-1zm7 0a1 1 0 00-1 1v10a1 1 0 002 0V5a1 1 0 00-1-1z"
-                            clipRule="evenodd"
-                          />
-                        ) : (
-                          <path d="M6.5 4.75a.75.75 0 011.125-.65l7 4.25a.75.75 0 010 1.3l-7 4.25A.75.75 0 016 13.25v-7.5a.75.75 0 01.5-.7z" />
-                        )}
-                      </svg>
-                      <span>{isPlaying ? "Pause" : "Play"}</span>
-                  </button>
-                  <button
-                    onClick={toggleFullscreen}
-                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 text-[11px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center gap-2"
-                  >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M3 3h5v2H5v3H3V3zm9 0h5v5h-2V5h-3V3zm3 9h2v5h-5v-2h3v-3zm-7 3v2H3v-5h2v3h3z" />
-                      </svg>
-                      <span>Fullscreen</span>
-                    </button>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] sm:text-xs 2xl:text-sm text-slate-200">
-                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800 text-slate-100 font-semibold">
-                      Start {trimStart.toFixed(1)}s
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800 text-slate-100 font-semibold">
-                      End {trimEnd.toFixed(1)}s
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800 text-slate-100 font-semibold">
-                      Thumb {frameTime.toFixed(1)}s
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800 text-slate-100 font-semibold">
-                      Clip {(trimEnd - trimStart).toFixed(1)}s
-                    </span>
-                  </div>
-
-              <div className="flex flex-wrap items-center gap-2.5 justify-center">
-                {file.highlight && (
-                  <button
-                    onClick={handleRevertToDone}
-                    disabled={reverting}
-                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md bg-red-500 text-white font-semibold hover:bg-red-400 transition disabled:opacity-60 text-[11px] sm:text-sm"
-                  >
-                        {reverting ? "Reverting..." : "Revert to Done"}
-                      </button>
-                    )}
-                {showIdActions && (
-                  <button
-                    onClick={handleRevertToId}
-                    disabled={revertingToId}
-                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md bg-amber-500 text-white font-semibold hover:bg-amber-400 transition disabled:opacity-60 text-[11px] sm:text-sm"
-                  >
-                    {revertingToId ? "Reverting..." : "Revert to ID"}
-                  </button>
-                )}
-                {showIdActions && (
-                  <button
-                    onClick={handleDeleteHighlight}
-                    disabled={deleting}
-                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md bg-red-600 text-white font-semibold hover:bg-red-500 transition disabled:opacity-60 text-[11px] sm:text-sm"
-                  >
-                    {deleting ? "Deleting..." : "Delete"}
-                  </button>
-                )}
-                <button
-                  onClick={handleSaveClick}
-                  disabled={saving}
-                  className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition disabled:opacity-60 text-[11px] sm:text-sm"
-                  >
-                        {saving ? "Saving..." : "Save highlight"}
-                      </button>
-                    </div>
-
-                  {hasExistingHighlightAssets && (
-                    <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-100 text-[11px] sm:text-xs 2xl:text-sm">
-                      <span className="font-semibold">Existing highlight detected</span>
-                      <button
-                        onClick={() => setShowReplacePrompt(true)}
-                        className="text-amber-900 bg-amber-200 hover:bg-amber-300 px-2 py-1 rounded-md font-semibold text-[11px]"
-                      >
-                        Change replace options
-                      </button>
-                    </div>
-                  )}
-                </div>
+              <div className="flex flex-col items-start gap-1 text-[10px] sm:text-[11px] 2xl:text-xs text-slate-200">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold">
+                  Start {trimStart.toFixed(1)}s
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold">
+                  End {trimEnd.toFixed(1)}s
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold">
+                  Thumb {frameTime.toFixed(1)}s
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold">
+                  Clip {(trimEnd - trimStart).toFixed(1)}s
+                </span>
               </div>
             </div>
+
+            {hasExistingHighlightAssets && (
+              <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-100 text-[11px] sm:text-xs">
+                <span className="font-semibold">Existing highlight detected</span>
+                <button
+                  onClick={() => setShowReplacePrompt(true)}
+                  className="text-amber-900 bg-amber-200 hover:bg-amber-300 px-2 py-1 rounded-md font-semibold text-[11px]"
+                >
+                  Options
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-800 bg-neutral-900 p-3 md:p-1 space-y-2.5">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] sm:text-[11px] 2xl:text-xs text-slate-300 pl-1">Timeline</label>
+              <span className="text-[11px] sm:text-[11px] 2xl:text-xs text-slate-400 pr-1">
+                Duration: {duration ? `${duration.toFixed(1)}s` : "loading..."}
+              </span>
+            </div>
+            {duration ? (
+              <Timeline
+                duration={duration}
+                trimStart={trimStart}
+                trimEnd={trimEnd}
+                frameTime={frameTime}
+                onChange={handleTimelineChange}
+                onPreview={handlePreviewTime}
+              />
+            ) : (
+              <p className="text-xs text-slate-400">Load the video to edit the trim and thumbnail markers.</p>
+            )}
           </div>
         </div>
 
@@ -940,6 +964,12 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {saving && (
+          <div className="absolute inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-center justify-center">
+            <HexLoader size={90} label="Saving highlight" />
           </div>
         )}
       </div>

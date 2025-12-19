@@ -39,17 +39,25 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Props) {
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
+    <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${
+        className={`flex items-center justify-center h-8 w-8 rounded-full border text-slate-200 transition ${
           currentPage === 1
-            ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-            : "bg-neutral-800 text-slate-200 hover:bg-neutral-700"
+            ? "border-slate-800 text-slate-600 cursor-not-allowed"
+            : "border-slate-700 hover:border-lime-400 hover:text-lime-300"
         }`}
       >
-        Previous
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+          <path
+            d="M15 18L9 12L15 6"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
 
       {renderPageNumbers()}
@@ -57,13 +65,21 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Props) {
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${
+        className={`flex items-center justify-center h-8 w-8 rounded-full border text-slate-200 transition ${
           currentPage === totalPages
-            ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-            : "bg-neutral-800 text-slate-200 hover:bg-neutral-700"
+            ? "border-slate-800 text-slate-600 cursor-not-allowed"
+            : "border-slate-700 hover:border-lime-400 hover:text-lime-300"
         }`}
       >
-        Next
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className="h-4 w-4">
+          <path
+            d="M9 6L15 12L9 18"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
     </div>
   );
