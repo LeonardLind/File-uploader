@@ -22,4 +22,51 @@
   scroll-behavior: smooth;
 }
 
+.filter-panel {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transform: translateX(12%);
+  transition: max-height 450ms ease, opacity 350ms ease, transform 450ms ease;
+  position: relative;
+}
+
+.filter-panel.filter-open {
+  max-height: 320px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.filter-panel .filter-panel-inner {
+  position: relative;
+}
+
+.filter-panel.filter-open .filter-panel-inner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 90% 10%, rgba(190, 242, 100, 0.08), transparent 45%),
+    linear-gradient(120deg, rgba(190, 242, 100, 0.12), transparent 55%);
+  transform-origin: right center;
+  animation: filter-surge 480ms ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes filter-surge {
+  0% {
+    clip-path: inset(0 0 100% 0);
+    opacity: 0;
+    transform: scaleX(0.7);
+  }
+  60% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+    transform: scaleX(1.02);
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
 

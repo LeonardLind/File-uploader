@@ -26,6 +26,7 @@ export function GalleryPage() {
   const [editing, setEditing] = useState<MetadataItem | null>(null);
   const [savingMetadata, setSavingMetadata] = useState(false);
   const [showSidebarFilters, setShowSidebarFilters] = useState(false);
+  const [mainFiltersOpen, setMainFiltersOpen] = useState(false);
 
   const [filters, setFilters] = useState({
     species: "",
@@ -69,6 +70,7 @@ export function GalleryPage() {
     setEditing(null);
     setHighlightEditor(null);
     setShowSidebarFilters(false);
+    setMainFiltersOpen(false);
   }, [view]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) =>
@@ -285,22 +287,47 @@ export function GalleryPage() {
                 {`${filtered.length} of ${files.length} file${files.length === 1 ? "" : "s"}`}
               </p>
             </div>
+            {files.length > 0 && !editing && (
+              <button
+                onClick={() => setMainFiltersOpen((prev) => !prev)}
+                className="self-start inline-flex items-center gap-2 rounded-md border border-slate-700 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-lime-400 transition"
+                title="Toggle filters"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4 text-lime-300"
+                >
+                  <path d="M4 5h16M6 12h12M9 19h6" />
+                </svg>
+                <span>{mainFiltersOpen ? "Hide filters" : "Show filters"}</span>
+              </button>
+            )}
           </div>
 
           {files.length > 0 && !editing && (
-            <GalleryFilterBar
-              filters={filters}
-              uniqueValues={uniqueValues}
-              onChange={handleFilterChange}
-              onClear={clearFilters}
-            />
+            <div className={`filter-panel ${mainFiltersOpen ? "filter-open" : ""}`}>
+              <div className="filter-panel-inner">
+                <GalleryFilterBar
+                  filters={filters}
+                  uniqueValues={uniqueValues}
+                  onChange={handleFilterChange}
+                  onClear={clearFilters}
+                />
+              </div>
+            </div>
           )}
           {error && <p className="text-red-400 mb-6 text-center">Error: {error}</p>}
 
           {filtered.length === 0 ? (
             <p className="text-slate-500 text-center">No matching results.</p>
           ) : useSidebarLayout ? (
-            <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 lg:gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-3 lg:gap-4">
               <aside className="bg-neutral-900 border border-slate-800 rounded-lg h-full flex flex-col shadow-md">
                 <div className="px-4 py-3 border-b border-slate-800 text-slate-200 font-semibold text-sm flex items-center justify-between gap-3">
                   <span>Files</span>

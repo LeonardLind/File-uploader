@@ -119,44 +119,46 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
         </div>
       </div>
 
-      <div className="bg-black rounded-lg overflow-hidden border border-slate-800 relative">
-        {videoLoading && (
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-10 pointer-events-none">
-            <HexLoader size={64} label="Loading video" />
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_250px] gap-2 h-full">
+        <div className="flex flex-col gap-2.5">
+          <div className="bg-black rounded-lg overflow-hidden border border-slate-800 relative flex-1 min-h-[220px]">
+            {videoLoading && (
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-10 pointer-events-none">
+                <HexLoader size={64} label="Loading video" />
+              </div>
+            )}
+            <video
+              src={`https://${bucket}.s3.amazonaws.com/${file.fileId}`}
+              controls
+              className="w-full h-full object-contain bg-black"
+              onLoadedMetadata={(e) => {
+                const dur = (e.target as HTMLVideoElement).duration;
+                setVideoDuration(isFinite(dur) ? dur : null);
+                if (isFinite(dur) && dur <= 5) {
+                  setVideoLoading(false);
+                }
+              }}
+              onTimeUpdate={(e) => {
+                const vid = e.target as HTMLVideoElement;
+                const dur = videoDuration ?? vid.duration;
+                const threshold = isFinite(dur) && dur > 0 ? Math.min(5, dur) : 5;
+                if (vid.currentTime >= threshold - 0.05) {
+                  setVideoLoading(false);
+                }
+              }}
+              onLoadedData={(e) => {
+                const vid = e.target as HTMLVideoElement;
+                const dur = videoDuration ?? vid.duration;
+                if (isFinite(dur) && dur <= 5) {
+                  setVideoLoading(false);
+                }
+              }}
+              onError={() => setVideoLoading(false)}
+            />
           </div>
-        )}
-        <video
-          src={`https://${bucket}.s3.amazonaws.com/${file.fileId}`}
-          controls
-          className="w-full h-[240px] object-contain bg-black relative"
-          onLoadedMetadata={(e) => {
-            const dur = (e.target as HTMLVideoElement).duration;
-            setVideoDuration(isFinite(dur) ? dur : null);
-            if (isFinite(dur) && dur <= 5) {
-              setVideoLoading(false);
-            }
-          }}
-          onTimeUpdate={(e) => {
-            const vid = e.target as HTMLVideoElement;
-            const dur = videoDuration ?? vid.duration;
-            const threshold = isFinite(dur) && dur > 0 ? Math.min(5, dur) : 5;
-            if (vid.currentTime >= threshold - 0.05) {
-              setVideoLoading(false);
-            }
-          }}
-          onLoadedData={(e) => {
-            const vid = e.target as HTMLVideoElement;
-            const dur = videoDuration ?? vid.duration;
-            if (isFinite(dur) && dur <= 5) {
-              setVideoLoading(false);
-            }
-          }}
-          onError={() => setVideoLoading(false)}
-        />
-      </div>
+        </div>
 
-      <div className="flex flex-col gap-2 md:gap-2.5">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <aside className="bg-neutral-900 border border-slate-800 rounded-lg p-3 flex flex-col gap-2.5">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Species</label>
             <input
@@ -200,10 +202,7 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
             <label className="text-[11px] text-slate-400">ID State</label>
             <select
               value={idState}
-              onChange={(e) => {
-                const next = e.target.value;
-                setIdState(next);
-              }}
+              onChange={(e) => setIdState(e.target.value)}
               className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white"
             >
               {["Unknown", "Genus", "AI ID", "Guess", "Confirmed"].map((opt) => (
@@ -213,9 +212,6 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
               ))}
             </select>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Plot</label>
             <select
@@ -232,7 +228,6 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
               ))}
             </select>
           </div>
-
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Experience</label>
             <select
@@ -249,9 +244,6 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
               ))}
             </select>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Sensor</label>
             <select
@@ -268,7 +260,6 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
               ))}
             </select>
           </div>
-
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Deployment</label>
             <select
@@ -285,10 +276,7 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
               ))}
             </select>
           </div>
-        </div>
-
-        {status === "display" && (
-          <div className="flex items-center justify-end gap-2">
+          {status === "display" && (
             <label className="flex items-center gap-2 text-[11px] text-slate-400">
               <input
                 type="checkbox"
@@ -298,8 +286,8 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
               />
               Active
             </label>
-          </div>
-        )}
+          )}
+        </aside>
       </div>
     </div>
   );
