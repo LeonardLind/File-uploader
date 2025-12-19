@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import uploadRoutes from "./routes/uploadRoutes.mjs";
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;

@@ -7,10 +7,10 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import type { Request, Response } from "express";
 import { ddb, TABLE_NAME, HIGHLIGHT_TABLE_NAME } from "../aws/dynamo.mjs";
-import { s3 } from "../aws/s3.mjs";
+import { deleteObject, getPresignedPutUrl } from "../aws/s3.mjs";
 import dotenv from "dotenv";
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 export async function generatePresignedUrl(req: Request, res: Response): Promise<void> {
   try {
@@ -53,7 +53,7 @@ export async function generatePresignedUrl(req: Request, res: Response): Promise
       Expires: 300,
     };
 
-    const uploadUrl = await s3.getSignedUrlPromise("putObject", params);
+    const uploadUrl = await getPresignedPutUrl(params);
     res.json({ success: true, uploadUrl, key });
   } catch (err: unknown) {
     console.error("Error generating presigned URL:", err);
@@ -308,22 +308,18 @@ export async function saveHighlightAsset(req: Request, res: Response): Promise<v
       const deleteOps: Array<Promise<any>> = [];
       if (prevHighlightFileId && prevHighlightFileId !== highlightFileId) {
         deleteOps.push(
-          s3
-            .deleteObject({
-              Bucket: targetBucket,
-              Key: prevHighlightFileId,
-            })
-            .promise()
+          deleteObject({
+            Bucket: targetBucket,
+            Key: prevHighlightFileId,
+          })
         );
       }
       if (prevHighlightThumbnailId && prevHighlightThumbnailId !== highlightThumbnailId) {
         deleteOps.push(
-          s3
-            .deleteObject({
-              Bucket: targetBucket,
-              Key: prevHighlightThumbnailId,
-            })
-            .promise()
+          deleteObject({
+            Bucket: targetBucket,
+            Key: prevHighlightThumbnailId,
+          })
         );
       }
       if (deleteOps.length) {
@@ -379,12 +375,10 @@ export async function deleteFileAndMetadata(req: Request, res: Response): Promis
 
     await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { fileId } }));
 
-    await s3
-      .deleteObject({
-        Bucket: process.env.AWS_BUCKET as string,
-        Key: fileId,
-      })
-      .promise();
+    await deleteObject({
+      Bucket: process.env.AWS_BUCKET as string,
+      Key: fileId,
+    });
 
     res.json({ success: true, message: "File and metadata deleted" });
   } catch (err: unknown) {
@@ -419,22 +413,18 @@ export async function deleteHighlightAsset(req: Request, res: Response): Promise
     const deleteOps: Array<Promise<any>> = [];
     if (highlightFileId) {
       deleteOps.push(
-        s3
-          .deleteObject({
-            Bucket: targetBucket,
-            Key: highlightFileId,
-          })
-          .promise()
+        deleteObject({
+          Bucket: targetBucket,
+          Key: highlightFileId,
+        })
       );
     }
     if (highlightThumbnailId) {
       deleteOps.push(
-        s3
-          .deleteObject({
-            Bucket: targetBucket,
-            Key: highlightThumbnailId,
-          })
-          .promise()
+        deleteObject({
+          Bucket: targetBucket,
+          Key: highlightThumbnailId,
+        })
       );
     }
     if (deleteOps.length) {
