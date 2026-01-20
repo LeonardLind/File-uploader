@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import type { MetadataItem } from "../types/gallery";
 import { deriveStatus, type ViewFilter } from "../utils/galleryUtils";
 
@@ -17,10 +17,18 @@ export function useFilteredMetadata(
   filters: Filters,
   locationSearch: string
 ) {
-  const [filtered, setFiltered] = useState<MetadataItem[]>([]);
-  const [view, setView] = useState<ViewFilter>("draft");
+  const view = useMemo<ViewFilter>(() => {
+    const rawView = new URLSearchParams(locationSearch).get("view");
+    return rawView === "id"
+      ? "id"
+      : rawView === "done"
+      ? "done"
+      : rawView === "display" || rawView === "action"
+      ? "display"
+      : "draft";
+  }, [locationSearch]);
 
-  useEffect(() => {
+  const filtered = useMemo(() => {
     let result = [...files];
 
     Object.entries(filters).forEach(([key, value]) => {
@@ -32,22 +40,11 @@ export function useFilteredMetadata(
       }
     });
 
-    const rawView = new URLSearchParams(locationSearch).get("view");
-    const nextView: ViewFilter =
-      rawView === "id"
-        ? "id"
-        : rawView === "done"
-        ? "done"
-        : rawView === "display" || rawView === "action"
-        ? "display"
-        : "draft";
-    setView(nextView);
-
-    if (nextView === "id") {
+    if (view === "id") {
       result = result.filter((f) => deriveStatus(f) === "id");
-    } else if (nextView === "done") {
+    } else if (view === "done") {
       result = result.filter((f) => deriveStatus(f) === "done");
-    } else if (nextView === "display") {
+    } else if (view === "display") {
       result = result.filter((f) => deriveStatus(f) === "display");
     } else {
       result = result.filter((f) => deriveStatus(f) === "draft");
@@ -59,8 +56,8 @@ export function useFilteredMetadata(
       return filters.updatedSort === "asc" ? da - db : db - da;
     });
 
-    setFiltered(result);
-  }, [files, filters, locationSearch]);
+    return result;
+  }, [files, filters, view]);
 
-  return { filtered, view, setView };
+  return { filtered, view };
 }

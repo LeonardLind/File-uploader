@@ -38,14 +38,14 @@ export function TopNav() {
             />
           )}
           {[
-            { label: "Draft", path: "/gallery?view=draft", i: 0 },
-            { label: "ID", path: "/gallery?view=id", i: 1 },
-            { label: "Done", path: "/gallery?view=done", i: 2 },
-            { label: "Display", path: "/gallery?view=display", i: 3 },
-          ].map(({ label, path, i }) => (
+            { label: "Draft", view: "draft", i: 0 },
+            { label: "ID", view: "id", i: 1 },
+            { label: "Done", view: "done", i: 2 },
+            { label: "Display", view: "display", i: 3 },
+          ].map(({ label, view: nextView, i }) => (
             <span
               key={label}
-              onClick={() => navigate(path)}
+              onClick={() => navigate(`/gallery?view=${nextView}`)}
               className={`relative z-20 uppercase cursor-pointer text-[13px] sm:text-sm pb-1 transition ${
                 activeIndex === i ? "text-lime-500" : "text-slate-300 hover:text-white"
               }`}

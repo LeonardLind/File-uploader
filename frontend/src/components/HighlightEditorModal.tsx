@@ -188,14 +188,25 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   const [isRecording, setIsRecording] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [highlightVideoExists, setHighlightVideoExists] = useState<boolean | null>(null);
   const suppressFrameCaptureRef = useRef(false);
   const effectiveStage = deriveStatus(file);
   const showIdActions = effectiveStage === "done";
 
   const videoUrl = `https://${bucket}.s3.amazonaws.com/${file.fileId}`;
   const hasExistingHighlightAssets = Boolean(file.highlightFileId || file.highlightThumbnailId);
+  const existingHighlightVideo =
+    highlightVideoExists ?? Boolean(file.highlightFileId);
+  const existingHighlightThumb = Boolean(file.highlightThumbnailId);
   const existingTrimStart = file.trimStartSec ?? 0;
   const existingTrimEnd = file.trimEndSec ?? 0;
+  const replacePromptMessage = existingHighlightVideo && existingHighlightThumb
+    ? "This file already has a trimmed video and thumbnail. Choose what to replace or keep."
+    : existingHighlightVideo
+        ? "This file already has a trimmed video. Choose what to replace or keep."
+        : existingHighlightThumb
+            ? "This file already has a thumbnail. Choose what to replace or keep."
+            : "This file already has a trimmed video and/or thumbnail. Choose what to replace or keep.";
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -299,7 +310,40 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
     setFramePreview(null);
     setVideoLoading(true);
     setVideoDuration(null);
+    setHighlightVideoExists(null);
   }, [file.fileId]);
+
+  useEffect(() => {
+    if (!file.highlightFileId) {
+      setHighlightVideoExists(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch(`${apiUrl}/api/upload/highlight/exists`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileId: file.fileId,
+            highlightFileId: file.highlightFileId,
+          }),
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.error || "Highlight check failed");
+        }
+        setHighlightVideoExists(Boolean(data.exists));
+      } catch (err: unknown) {
+        if (controller.signal.aborted) return;
+        console.warn("Failed to verify highlight video", err);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [apiUrl, file.fileId, file.highlightFileId]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -912,7 +956,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
               </div>
 
               <p className="text-slate-400 text-xs sm:text-sm 2xl:text-sm">
-                This file already has a trimmed video and/or thumbnail. Choose what to replace or keep.
+                {replacePromptMessage}
               </p>
 
               <label className="flex items-center gap-3 text-slate-200 text-xs sm:text-sm 2xl:text-sm">

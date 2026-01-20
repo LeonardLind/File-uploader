@@ -27,6 +27,9 @@ export function GalleryPage() {
   const [savingMetadata, setSavingMetadata] = useState(false);
   const [showSidebarFilters, setShowSidebarFilters] = useState(false);
   const [mainFiltersOpen, setMainFiltersOpen] = useState(false);
+  const [highlightAvailability, setHighlightAvailability] = useState<
+    Record<string, { highlightFileId?: string; exists: boolean }>
+  >({});
 
   const [filters, setFilters] = useState({
     species: "",
@@ -70,7 +73,6 @@ export function GalleryPage() {
     setEditing(null);
     setHighlightEditor(null);
     setShowSidebarFilters(false);
-    setMainFiltersOpen(false);
   }, [view]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) =>
@@ -267,6 +269,59 @@ export function GalleryPage() {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
 
+  useEffect(() => {
+    if (view !== "display") {
+      setHighlightAvailability((prev) => (Object.keys(prev).length ? {} : prev));
+      return;
+    }
+
+    const controller = new AbortController();
+    const filesToCheck = paginatedItems.filter((item) => {
+      if (!item.highlightFileId) return false;
+      const cached = highlightAvailability[item.fileId];
+      return !cached || cached.highlightFileId !== item.highlightFileId;
+    });
+
+    if (!filesToCheck.length) return;
+
+    (async () => {
+      const updates: Record<string, { highlightFileId?: string; exists: boolean }> = {};
+
+      await Promise.all(
+        filesToCheck.map(async (item) => {
+          try {
+            const res = await fetch(`${API_URL}/api/upload/highlight/exists`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fileId: item.fileId, highlightFileId: item.highlightFileId }),
+              signal: controller.signal,
+            });
+            const data = await res.json();
+            if (!res.ok || !data?.success) {
+              throw new Error(data?.error || "Highlight check failed");
+            }
+            updates[item.fileId] = { highlightFileId: item.highlightFileId, exists: Boolean(data.exists) };
+          } catch (err: unknown) {
+            if (controller.signal.aborted) return;
+            console.warn("Failed to verify highlight asset", err);
+            updates[item.fileId] = { highlightFileId: item.highlightFileId, exists: false };
+          }
+        })
+      );
+
+      if (controller.signal.aborted || Object.keys(updates).length === 0) {
+        return;
+      }
+
+      setHighlightAvailability((prev) => ({
+        ...prev,
+        ...updates,
+      }));
+    })();
+
+    return () => controller.abort();
+  }, [API_URL, paginatedItems, view]);
+
   if (loading) {
     return (
       <div className="flex flex-col w-full min-h-screen bg-neutral-950 text-white">
@@ -433,7 +488,11 @@ export function GalleryPage() {
                         const statusStyle = statusStyles[status];
                         const isActive =
                           editing?.fileId === file.fileId || highlightEditor?.fileId === file.fileId;
-                        const hasTrimmedHighlight = Boolean(file.highlightFileId && file.highlightThumbnailId);
+                        const trimmedAvailability = highlightAvailability[file.fileId];
+                        const hasTrimmedHighlight =
+                          trimmedAvailability && trimmedAvailability.highlightFileId === file.highlightFileId
+                            ? trimmedAvailability.exists
+                            : Boolean(file.highlightFileId && file.highlightThumbnailId);
 
                         return (
                           <tr
@@ -544,7 +603,7 @@ export function GalleryPage() {
       )}
 
       {savingMetadata && (
-        <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-70 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
           <HexLoader size={88} label="Saving metadata" />
         </div>
       )}
@@ -566,7 +625,7 @@ export function GalleryPage() {
       />
 
       {showSidebarFilters && (
-        <div className="fixed inset-0 z-[75] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-75 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
           <div className="w-full max-w-4xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-4 sm:p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base sm:text-lg font-semibold text-white">Filters</h3>
@@ -585,19 +644,16 @@ export function GalleryPage() {
                 </button>
               </div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-neutral-900 p-3 sm:p-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <GalleryFilterBar
-                  filters={filters}
-                  uniqueValues={uniqueValues}
-                  onChange={handleFilterChange}
-                  onClear={clearFilters}
-                />
-              </div>
+              <GalleryFilterBar
+                filters={filters}
+                uniqueValues={uniqueValues}
+                onChange={handleFilterChange}
+                showClear={false}
+                layout="grid"
+              />
             </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 }

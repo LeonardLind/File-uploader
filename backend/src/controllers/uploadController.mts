@@ -7,7 +7,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import type { Request, Response } from "express";
 import { ddb, TABLE_NAME, HIGHLIGHT_TABLE_NAME } from "../aws/dynamo.mjs";
-import { deleteObject, getPresignedPutUrl } from "../aws/s3.mjs";
+import { deleteObject, getPresignedPutUrl, objectExists } from "../aws/s3.mjs";
 import dotenv from "dotenv";
 
 dotenv.config({ quiet: true });
@@ -467,6 +467,46 @@ export async function deleteHighlightAsset(req: Request, res: Response): Promise
     res.status(500).json({
       success: false,
       error: err instanceof Error ? err.message : "Failed to delete highlight asset",
+    });
+  }
+}
+
+export async function checkHighlightExists(req: Request, res: Response): Promise<void> {
+  try {
+    const { fileId, highlightFileId } = req.body as {
+      fileId?: string;
+      highlightFileId?: string;
+    };
+
+    if (!fileId && !highlightFileId) {
+      res.status(400).json({ success: false, error: "fileId or highlightFileId is required" });
+      return;
+    }
+
+    let highlightKey = highlightFileId;
+    if (!highlightKey && fileId) {
+      const current = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: { fileId } }));
+      highlightKey = (current.Item as any)?.highlightFileId as string | undefined;
+    }
+
+    const targetBucket = (process.env.AWS_HIGHLIGHT_BUCKET as string) || (process.env.AWS_BUCKET as string);
+    if (!targetBucket) {
+      res.status(500).json({ success: false, error: "Missing target bucket configuration" });
+      return;
+    }
+
+    if (!highlightKey) {
+      res.json({ success: true, exists: false, fileId: fileId ?? null });
+      return;
+    }
+
+    const exists = await objectExists({ Bucket: targetBucket, Key: highlightKey });
+    res.json({ success: true, exists, fileId: fileId ?? null, highlightFileId: highlightKey });
+  } catch (err: unknown) {
+    console.error("Error checking highlight asset:", err);
+    res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to verify highlight asset",
     });
   }
 }

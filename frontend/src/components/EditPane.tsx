@@ -106,7 +106,7 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
           </button>
           <button
             onClick={save}
-            className="px-3 py-1 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition text-[11px] md:text-xs"
+            className="px-3 py-1 rounded-md border border-lime-500 text-lime-100 font-semibold hover:bg-lime-400/10 transition text-[11px] md:text-xs"
           >
             Save
           </button>

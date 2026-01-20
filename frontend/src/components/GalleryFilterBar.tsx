@@ -21,28 +21,61 @@ type Props = {
   filters: Filters;
   uniqueValues: UniqueValues;
   onChange: (key: keyof Filters, value: string) => void;
-  onClear: () => void;
+  onClear?: () => void;
+  showClear?: boolean;
+  layout?: "flex" | "grid";
 };
 
-export function GalleryFilterBar({ filters, uniqueValues, onChange, onClear }: Props) {
+export function GalleryFilterBar({
+  filters,
+  uniqueValues,
+  onChange,
+  onClear,
+  showClear = true,
+  layout = "flex",
+}: Props) {
+  const shouldShowClear = showClear && typeof onClear === "function";
+  const filterFields = [
+    ["species", "Species"],
+    ["plot", "Plot"],
+    ["experiencePoint", "Experience"],
+    ["sensorId", "Sensor"],
+    ["deploymentId", "Deployment"],
+    ["id_state", "ID State"],
+  ] as const;
+  const totalItems = filterFields.length + 1;
+  const wrapperClass =
+    layout === "grid"
+      ? "bg-neutral-900 border border-slate-800 rounded-lg p-1.5 mb-2 flex flex-col gap-2"
+      : "bg-neutral-900 border border-slate-800 rounded-lg p-1.5 mb-2 flex flex-row flex-wrap gap-2 items-center";
+  const filtersClass =
+    layout === "grid"
+      ? "grid grid-cols-12 gap-2"
+      : "flex flex-wrap gap-2 flex-1 min-w-0";
+  const selectClass =
+    layout === "grid"
+      ? "bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1 text-xs sm:text-sm h-7 sm:h-8 w-full"
+      : "bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1 text-xs sm:text-sm h-7 sm:h-8 flex-1 min-w-[9rem]";
+  const sortClass =
+    layout === "grid"
+      ? "bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1 text-xs sm:text-sm h-7 sm:h-8 w-full"
+      : "bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1 text-xs sm:text-sm h-7 sm:h-8 flex-1 min-w-[10rem]";
+
+  const gridSpanFor = (index: number) => {
+    if (layout !== "grid") return "";
+    const isLastRowItem = index >= totalItems - 3;
+    return isLastRowItem ? "col-span-6 sm:col-span-4 lg:col-span-4" : "col-span-6 sm:col-span-4 lg:col-span-3";
+  };
+
   return (
-    <div className="bg-neutral-900 border border-slate-800 rounded-lg p-3 mb-8 flex flex-col md:flex-row md:flex-wrap gap-3 items-start md:items-center justify-between">
-      <div className="flex flex-wrap gap-2.5 flex-1 min-w-0">
-        {((
-          [
-            ["species", "Species"],
-            ["plot", "Plot"],
-            ["experiencePoint", "Experience"],
-            ["sensorId", "Sensor"],
-            ["deploymentId", "Deployment"],
-            ["id_state", "ID State"],
-          ] as const
-        )).map(([key, label]) => (
+    <div className={wrapperClass}>
+      <div className={filtersClass}>
+        {filterFields.map(([key, label], index) => (
           <select
             key={key}
             value={filters[key as keyof Filters] || ""}
             onChange={(e) => onChange(key as keyof Filters, e.target.value)}
-            className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm w-[8.5rem] md:w-[9rem]"
+            className={`${selectClass} ${gridSpanFor(index)}`}
           >
             <option value="">{label}</option>
             {uniqueValues[key as keyof UniqueValues]
@@ -58,21 +91,21 @@ export function GalleryFilterBar({ filters, uniqueValues, onChange, onClear }: P
         <select
           value={filters.updatedSort}
           onChange={(e) => onChange("updatedSort", e.target.value)}
-          className="bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1.5 text-sm w-[10rem] md:w-[11rem]"
+          className={`${sortClass} ${gridSpanFor(totalItems - 1)}`}
         >
           <option value="desc">Newest first</option>
           <option value="asc">Oldest first</option>
         </select>
       </div>
 
-      <div className="flex items-center gap-2.5">
+      {shouldShowClear && (
         <button
           onClick={onClear}
-          className="px-3 py-1.5 text-sm rounded-md bg-slate-700 hover:bg-slate-600 transition"
+          className="px-2.5 py-1 text-xs rounded-md border border-slate-700 bg-neutral-900 text-slate-200 hover:border-lime-400 font-semibold transition h-7 sm:h-8"
         >
           Clear Filters
         </button>
-      </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { MetadataItem } from "../types/gallery";
 
-export type Status = "draft" | "id" | "done" | "display";
-export type ViewFilter = "draft" | "id" | "done" | "display";
+export type Status = string;
+export type ViewFilter = string;
 
 const REQUIRED_FIELDS: Array<keyof MetadataItem> = ["plot", "experiencePoint", "sensorId", "deploymentId"];
 
