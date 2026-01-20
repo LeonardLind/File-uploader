@@ -393,14 +393,14 @@ export function GalleryPage() {
                     Filters
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto custom-scroll flex flex-col gap-2 px-2 pt-5 pb-2">
+                <div className="flex-1 overflow-y-auto custom-scroll flex flex-col gap-2.5 px-2 py-4.5 ">
                   {paginatedItems.map((item) => {
                     const active = editing?.fileId === item.fileId;
                     return (
                       <button
                         key={item.fileId}
                         onClick={() => setEditing(item)}
-                        className={`w-full text-left px-3 py-2 text-[11px] border border-slate-800 rounded-lg transition-colors ${
+                        className={`w-full text-left px-3 py-1.5 text-[11px] border border-slate-800 rounded-lg transition-colors ${
                           active
                             ? "bg-slate-800/80 text-white border-l-4 border-lime-400"
                             : "text-slate-200 hover:bg-neutral-800/80"
