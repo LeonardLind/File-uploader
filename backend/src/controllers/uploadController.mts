@@ -12,6 +12,218 @@ import dotenv from "dotenv";
 
 dotenv.config({ quiet: true });
 
+const DEFAULT_IUCN_BASE_URL = "https://api.iucnredlist.org/api/v4";
+const IUCN_REQUEST_TIMEOUT_MS = 8000;
+const IUCN_CATEGORY_LABELS: Record<string, string> = {
+  EX: "Extinct",
+  EW: "Extinct in the Wild",
+  RE: "Regionally Extinct",
+  CR: "Critically Endangered",
+  EN: "Endangered",
+  VU: "Vulnerable",
+  NT: "Near Threatened",
+  LC: "Least Concern",
+  DD: "Data Deficient",
+  NE: "Not Evaluated",
+};
+
+type IucnCommonName = {
+  name?: string;
+  language?: string;
+  main?: boolean;
+};
+
+type IucnTaxon = {
+  sis_id?: number;
+  scientific_name?: string;
+  common_names?: IucnCommonName[];
+  class_name?: string;
+  genus_name?: string;
+  species_name?: string;
+  infra_name?: string | null;
+};
+
+type IucnScientificResponse = {
+  taxon?: IucnTaxon;
+};
+
+type IucnAssessment = {
+  year_published?: string;
+  latest?: boolean;
+  red_list_category_code?: string;
+  url?: string;
+};
+
+type IucnSisResponse = {
+  taxon?: IucnTaxon;
+  assessments?: IucnAssessment[];
+};
+
+type IucnSummary = {
+  common_name?: string | null;
+  class_name?: string | null;
+  red_list_category_code?: string | null;
+  red_list_category_label?: string | null;
+  assessment_year?: string | null;
+  assessment_url?: string | null;
+  sis_id?: number | null;
+};
+
+const IUCN_CACHE = new Map<string, IucnSummary>();
+
+const normalizeSpeciesName = (value: string) => value.trim().replace(/\s+/g, " ");
+
+const pickCommonName = (commonNames?: IucnCommonName[]) => {
+  if (!Array.isArray(commonNames) || commonNames.length === 0) return "";
+  const mainEng = commonNames.find((name) => name.main && name.language === "eng");
+  if (mainEng?.name) return mainEng.name;
+  const anyEng = commonNames.find((name) => name.language === "eng");
+  if (anyEng?.name) return anyEng.name;
+  return commonNames[0]?.name ?? "";
+};
+
+const pickLatestAssessment = (assessments?: IucnAssessment[]) => {
+  if (!Array.isArray(assessments) || assessments.length === 0) return null;
+  const latest = assessments.find((assessment) => assessment.latest);
+  if (latest) return latest;
+  const sorted = [...assessments].sort((a, b) => {
+    const yearA = Number(a.year_published) || 0;
+    const yearB = Number(b.year_published) || 0;
+    return yearB - yearA;
+  });
+  return sorted[0] ?? null;
+};
+
+const parseScientificName = (scientificName: string) => {
+  const parts = normalizeSpeciesName(scientificName).split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return null;
+  const [genusName, speciesName, ...rest] = parts;
+  const infraName = rest.length ? rest.join(" ") : "";
+  return { genusName, speciesName, infraName };
+};
+
+const fetchIucnJson = async (url: string, token: string) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), IUCN_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "File-Uploader/1.0",
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const data = await response.json().catch(() => ({}));
+    return { response, data };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const fetchIucnSummary = async (scientificName: string): Promise<IucnSummary | null> => {
+  const token = process.env.IUCN_API_TOKEN?.trim();
+  if (!token) return null;
+
+  const normalized = normalizeSpeciesName(scientificName);
+  const cacheKey = normalized.toLowerCase();
+  const cached = IUCN_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const parsed = parseScientificName(normalized);
+  if (!parsed) return null;
+
+  const baseUrl = (process.env.IUCN_API_BASE_URL || DEFAULT_IUCN_BASE_URL).trim().replace(/\/$/, "");
+
+  try {
+    const scientificUrl = new URL(`${baseUrl}/taxa/scientific_name`);
+    scientificUrl.searchParams.set("genus_name", parsed.genusName);
+    scientificUrl.searchParams.set("species_name", parsed.speciesName);
+    if (parsed.infraName) scientificUrl.searchParams.set("infra_name", parsed.infraName);
+
+    const scientificResult = await fetchIucnJson(scientificUrl.toString(), token);
+    if (scientificResult.response.status === 404) return null;
+    if (!scientificResult.response.ok) {
+      console.warn("IUCN scientific name lookup failed", {
+        status: scientificResult.response.status,
+        species: normalized,
+      });
+      return null;
+    }
+
+    const scientificData = scientificResult.data as IucnScientificResponse;
+    const taxon = scientificData?.taxon;
+    if (!taxon) return null;
+
+    const sisId = taxon.sis_id ?? null;
+    const summary: IucnSummary = {
+      common_name: pickCommonName(taxon.common_names) || null,
+      class_name: taxon.class_name ?? null,
+      sis_id: sisId,
+      red_list_category_code: null,
+      red_list_category_label: null,
+      assessment_year: null,
+      assessment_url: null,
+    };
+
+    if (!sisId) {
+      IUCN_CACHE.set(cacheKey, summary);
+      return summary;
+    }
+
+    const sisUrl = `${baseUrl}/taxa/sis/${sisId}`;
+    const sisResult = await fetchIucnJson(sisUrl, token);
+    if (!sisResult.response.ok) {
+      console.warn("IUCN sis lookup failed", {
+        status: sisResult.response.status,
+        sisId,
+        species: normalized,
+      });
+      IUCN_CACHE.set(cacheKey, summary);
+      return summary;
+    }
+
+    const sisData = sisResult.data as IucnSisResponse;
+    const latestAssessment = pickLatestAssessment(sisData?.assessments);
+    if (latestAssessment) {
+      const code = latestAssessment.red_list_category_code ?? null;
+      summary.red_list_category_code = code;
+      summary.red_list_category_label = code ? IUCN_CATEGORY_LABELS[code] || null : null;
+      summary.assessment_year = latestAssessment.year_published ?? null;
+      summary.assessment_url = latestAssessment.url ?? null;
+    }
+
+    IUCN_CACHE.set(cacheKey, summary);
+    return summary;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      console.warn("IUCN request timed out", { species: normalized });
+      return null;
+    }
+    console.warn("IUCN request failed", { species: normalized, error: err });
+    return null;
+  }
+};
+
+const mapWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>
+) => {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(limit, items.length);
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const currentIndex = nextIndex++;
+      if (currentIndex >= items.length) return;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+};
+
 export async function generatePresignedUrl(req: Request, res: Response): Promise<void> {
   try {
     const { filename, contentType, type } = req.body as {
@@ -467,6 +679,68 @@ export async function deleteHighlightAsset(req: Request, res: Response): Promise
     res.status(500).json({
       success: false,
       error: err instanceof Error ? err.message : "Failed to delete highlight asset",
+    });
+  }
+}
+
+export async function getConfirmedSpeciesSummary(_req: Request, res: Response): Promise<void> {
+  try {
+    const confirmedItems: Array<Record<string, any>> = [];
+    let lastEvaluatedKey: Record<string, any> | undefined;
+
+    do {
+      const data = await ddb.send(
+        new ScanCommand({
+          TableName: TABLE_NAME,
+          ProjectionExpression: "#species, #id_state",
+          FilterExpression: "#id_state = :confirmed",
+          ExpressionAttributeNames: {
+            "#species": "species",
+            "#id_state": "id_state",
+          },
+          ExpressionAttributeValues: {
+            ":confirmed": "Confirmed",
+          },
+          ExclusiveStartKey: lastEvaluatedKey,
+        })
+      );
+      if (data.Items) confirmedItems.push(...data.Items);
+      lastEvaluatedKey = data.LastEvaluatedKey as Record<string, any> | undefined;
+    } while (lastEvaluatedKey);
+
+    const summaryMap = new Map<string, { species: string; count: number }>();
+    for (const item of confirmedItems) {
+      if (typeof item.species !== "string") continue;
+      const normalized = normalizeSpeciesName(item.species);
+      if (!normalized) continue;
+      const key = normalized.toLowerCase();
+      const existing = summaryMap.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        summaryMap.set(key, { species: normalized, count: 1 });
+      }
+    }
+
+    const entries = Array.from(summaryMap.values()).sort((a, b) =>
+      a.species.localeCompare(b.species)
+    );
+    const iucnDetails = await mapWithConcurrency(entries, 4, async (entry) => {
+      const details = await fetchIucnSummary(entry.species);
+      return details || {};
+    });
+
+    const items = entries.map((entry, index) => ({
+      ...entry,
+      ...iucnDetails[index],
+    }));
+
+    res.json({ success: true, count: items.length, items });
+  } catch (err: unknown) {
+    console.error("Error building confirmed species summary:", err);
+    res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to build species summary",
     });
   }
 }

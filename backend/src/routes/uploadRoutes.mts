@@ -9,6 +9,7 @@ import {
   saveHighlightAsset,
   deleteHighlightAsset,
   checkHighlightExists,
+  getConfirmedSpeciesSummary,
 } from "../controllers/uploadController.mjs";
 
 const router = express.Router();
@@ -20,6 +21,7 @@ router.post("/presign", generatePresignedUrl);
 router.post("/metadata", saveMetadata);
 router.get("/metadata", getAllMetadata);
 router.get("/metadata/:fileId", getMetadata);
+router.get("/confirmed-summary", getConfirmedSpeciesSummary);
 
 // Update metadata
 router.put("/metadata/update", updateMetadata);
