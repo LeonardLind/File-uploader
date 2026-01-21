@@ -31,7 +31,21 @@ type EditPaneProps = {
   currentView: ViewFilter;
 };
 
-export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose, onSave, onDelete, onAlert, currentView }: EditPaneProps) {
+type IucnSuggestion = {
+  scientific_name: string;
+  common_name?: string;
+  class_name?: string;
+  order_name?: string;
+  family_name?: string;
+  genus_name?: string;
+  species_name?: string;
+  sis_id?: number | null;
+};
+
+const MIN_SPECIES_QUERY = 3;
+const SPECIES_DEBOUNCE_MS = 250;
+
+export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, onDelete, onAlert, currentView }: EditPaneProps) {
   const defaultStage = useMemo<Status>(() => {
     if (currentView === "draft") return "id";
     if (currentView === "id") return "done";
@@ -49,6 +63,12 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
   const [active, setActive] = useState(file.displayState !== "Inactive");
   const [videoLoading, setVideoLoading] = useState(true);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [speciesSuggestions, setSpeciesSuggestions] = useState<IucnSuggestion[]>([]);
+  const [speciesOpen, setSpeciesOpen] = useState(false);
+  const [speciesLoading, setSpeciesLoading] = useState(false);
+  const [speciesError, setSpeciesError] = useState<string | null>(null);
+  const [speciesHint, setSpeciesHint] = useState<string | null>(null);
+  const [speciesSelectedFromIucn, setSpeciesSelectedFromIucn] = useState(false);
 
   const locked = deriveStatus(file) === "display";
   const allFieldsFilled = [species, plot, experiencePoint, sensorId, deploymentId].every(
@@ -67,6 +87,11 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
     setActive(file.displayState !== "Inactive");
     setVideoLoading(true);
     setVideoDuration(null);
+    setSpeciesSuggestions([]);
+    setSpeciesOpen(false);
+    setSpeciesError(null);
+    setSpeciesHint(null);
+    setSpeciesSelectedFromIucn(false);
   }, [file, defaultStage]);
 
   useEffect(() => {
@@ -75,8 +100,90 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
     }
   }, [status, canSetDisplayStage]);
 
+  const speciesQuery = species.trim();
+  const filteredSuggestions = useMemo(() => {
+    if (speciesQuery.length < MIN_SPECIES_QUERY) return [];
+    const lower = speciesQuery.toLowerCase();
+    return speciesSuggestions.filter((item) => {
+      const displayName = (item.common_name || item.scientific_name).toLowerCase();
+      return (
+        displayName.startsWith(lower) ||
+        item.scientific_name.toLowerCase().startsWith(lower)
+      );
+    });
+  }, [speciesQuery, speciesSuggestions]);
+
+  useEffect(() => {
+    if (locked) return;
+    if (speciesQuery.length < MIN_SPECIES_QUERY) {
+      setSpeciesSuggestions([]);
+      setSpeciesLoading(false);
+      setSpeciesError(null);
+      setSpeciesHint(null);
+      return;
+    }
+
+    const parts = speciesQuery.split(/\s+/).filter(Boolean);
+    if (parts.length < 2) {
+      setSpeciesSuggestions([]);
+      setSpeciesLoading(false);
+      setSpeciesError(null);
+      setSpeciesHint("Enter genus and species (e.g., Panthera tigris).");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setSpeciesLoading(true);
+      setSpeciesError(null);
+      setSpeciesHint(null);
+      try {
+        const res = await fetch(
+          `${apiUrl}/api/iucn/scientific-name?q=${encodeURIComponent(speciesQuery)}`,
+          { signal: controller.signal }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error || "Failed to load species");
+        }
+        const results = Array.isArray(data?.result) ? data.result : [];
+        setSpeciesSuggestions(results);
+        if (data?.hint) {
+          setSpeciesHint(typeof data.hint === "string" ? data.hint : null);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setSpeciesError(err instanceof Error ? err.message : "Failed to load species");
+        setSpeciesSuggestions([]);
+      } finally {
+        setSpeciesLoading(false);
+      }
+    }, SPECIES_DEBOUNCE_MS);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [apiUrl, locked, speciesQuery]);
+
+  const handleSpeciesSelect = (item: IucnSuggestion) => {
+    setSpecies(item.scientific_name);
+    setSpeciesSelectedFromIucn(true);
+    setSpeciesOpen(false);
+  };
+
   const save = () => {
     const payloadIdState = idState || "Unknown";
+    const currentStatus = deriveStatus(file);
+    if (
+      (status === "done" || status === "display") &&
+      !speciesSelectedFromIucn &&
+      currentStatus !== "done" &&
+      currentStatus !== "display"
+    ) {
+      onAlert("Latin name required", "Select a Latin name from the IUCN lookup before moving to Done.");
+      return;
+    }
     onSave({
       species,
       plot,
@@ -161,13 +268,64 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
         <aside className="bg-neutral-900 border border-slate-800 rounded-lg p-3 flex flex-col gap-2.5">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Species</label>
-            <input
-              value={species}
-              onChange={(e) => setSpecies(e.target.value)}
-              className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.5 text-[11px] md:text-[12px] text-white"
-              placeholder="Enter species"
-              disabled={locked}
-            />
+            <div className="relative">
+              <input
+                value={species}
+                onChange={(e) => {
+                  setSpecies(e.target.value);
+                  setSpeciesSelectedFromIucn(false);
+                  setSpeciesOpen(true);
+                }}
+                onFocus={() => {
+                  if (!locked) setSpeciesOpen(true);
+                }}
+                onBlur={() => {
+                  setTimeout(() => setSpeciesOpen(false), 120);
+                }}
+                className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.5 text-[11px] md:text-[12px] text-white"
+                placeholder="Enter species"
+                disabled={locked}
+              />
+              {speciesOpen && !locked && speciesQuery.length >= MIN_SPECIES_QUERY && (
+                <div className="absolute z-20 mt-1 w-full rounded-md border border-slate-700 bg-neutral-900 shadow-lg max-h-48 overflow-y-auto custom-scroll">
+                  {speciesLoading && (
+                    <div className="px-2 py-2 text-[11px] text-slate-400">Searching...</div>
+                  )}
+                  {!speciesLoading && speciesError && (
+                    <div className="px-2 py-2 text-[11px] text-red-400">{speciesError}</div>
+                  )}
+                  {!speciesLoading && !speciesError && speciesHint && (
+                    <div className="px-2 py-2 text-[11px] text-slate-400">{speciesHint}</div>
+                  )}
+                  {!speciesLoading && !speciesError && !speciesHint && filteredSuggestions.length === 0 && (
+                    <div className="px-2 py-2 text-[11px] text-slate-400">No matches.</div>
+                  )}
+                  {!speciesLoading &&
+                    !speciesError &&
+                    filteredSuggestions.map((item) => (
+                      <button
+                        key={`${item.sis_id ?? ""}-${item.scientific_name}`}
+                        type="button"
+                        className="w-full text-left px-2 py-1.5 text-[11px] text-slate-200 hover:bg-neutral-800/80 transition"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleSpeciesSelect(item);
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-slate-100">
+                            {item.common_name || item.scientific_name}
+                          </span>
+                          {item.class_name && <span className="text-[10px] text-slate-400">{item.class_name}</span>}
+                        </div>
+                        {item.common_name && (
+                          <div className="text-[10px] text-slate-400">{item.scientific_name}</div>
+                        )}
+                      </button>
+                    ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Stage</label>
@@ -175,6 +333,16 @@ export function EditPane({ file, bucket, apiUrl: _apiUrl, uniqueValues, onClose,
               value={status}
               onChange={(e) => {
                 const nextStatus = e.target.value as Status;
+                const currentStatus = deriveStatus(file);
+                if (
+                  (nextStatus === "done" || nextStatus === "display") &&
+                  !speciesSelectedFromIucn &&
+                  currentStatus !== "done" &&
+                  currentStatus !== "display"
+                ) {
+                  onAlert("Latin name required", "Select a Latin name from the IUCN lookup before moving to Done.");
+                  return;
+                }
                 if ((nextStatus === "done" || nextStatus === "display") && (!canSetDisplayStage || idState !== "Confirmed")) {
                   onAlert(
                     nextStatus === "done"

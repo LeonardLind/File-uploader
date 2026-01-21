@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import uploadRoutes from "./routes/uploadRoutes.mjs";
+import iucnRoutes from "./routes/iucnRoutes.mjs";
 
 dotenv.config({ quiet: true });
 
@@ -13,6 +14,7 @@ app.use(express.json());
 
 // Routes
 app.use("/api/upload", uploadRoutes);
+app.use("/api/iucn", iucnRoutes);
 
 app.get("/", (_req, res) => {
   res.send("API is alive!");
