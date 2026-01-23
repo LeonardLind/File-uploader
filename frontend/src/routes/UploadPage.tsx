@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useImageStore } from "../state/useImageStore";
 import { FileDropzone } from "../components/FileDropzone";
 import backgroundImage from "../assets/forst.png";
+import { useToast } from "../components/ToastProvider";
 
 type UploadedFile = {
   id: string;
@@ -17,6 +18,7 @@ export function UploadPage() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [uploadingAll, setUploadingAll] = useState(false);
   const navigate = useNavigate();
+  const { notify } = useToast();
 
   const API_URL = import.meta.env.VITE_API_URL;
 
@@ -115,10 +117,19 @@ export function UploadPage() {
         sensorId: img.sensorId,
         stage: "draft",
       });
+      notify({
+        title: "Upload complete",
+        message: `${img.file.name} saved to Draft.`,
+        tone: "success",
+      });
     } catch (err) {
       console.error("Upload error", err);
       updateImage(img.id, { uploading: false });
-      alert(`Upload failed for ${img.file?.name ?? img.id}`);
+      notify({
+        title: "Upload failed",
+        message: `${img.file?.name ?? img.id}: ${err instanceof Error ? err.message : "Unable to upload."}`,
+        tone: "error",
+      });
     }
   }
 

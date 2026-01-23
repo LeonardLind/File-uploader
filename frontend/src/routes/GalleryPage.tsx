@@ -13,6 +13,7 @@ import { useConfirmDialog } from "../hooks/useConfirmDialog";
 import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
 import { deriveStatus, type Status } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
+import { useToast } from "../components/ToastProvider";
 
 const statusStyles: Record<Status, { bg: string; text: string; label: string }> = {
   draft: { bg: "bg-slate-700", text: "text-white", label: "Draft" },
@@ -51,6 +52,7 @@ export function GalleryPage() {
   const { files, setFiles, loading, error } = useMetadata(API_URL);
   const { filtered, view } = useFilteredMetadata(files, filters, location.search);
   useKeyboardNavigation(editing, filtered, setEditing);
+  const { notify } = useToast();
 
   const isSidebarLayout = view === "draft" || view === "id";
   const useSidebarLayout = isSidebarLayout && !!editing;
@@ -168,6 +170,7 @@ export function GalleryPage() {
     highlight?: boolean;
   }) => {
     if (!editing) return;
+    const previousStage = deriveStatus(editing);
     if (payload.status === "done") {
       const requiredFilled = [
         payload.species,
@@ -242,6 +245,28 @@ export function GalleryPage() {
       setEditing((prev) =>
         prev ? { ...prev, ...payload, highlight: sendHighlight ?? prev.highlight, displayState } : null
       );
+
+      if (payload.status !== previousStage) {
+        if (payload.status === "draft" && previousStage === "id") {
+          notify({
+            title: "Reverted to DRAFT",
+            message: "Item moved to DRAFT.",
+            tone: "info",
+          });
+        } else {
+          notify({
+            title: "Stage updated",
+            message: `Item moved to ${payload.status.toUpperCase()}.`,
+            tone: "success",
+          });
+        }
+      } else {
+        notify({
+          title: "Metadata saved",
+          message: "Item updated successfully.",
+          tone: "success",
+        });
+      }
 
       const currentIndex = filtered.findIndex((f) => f.fileId === editing.fileId);
       if (currentIndex >= 0 && currentIndex < filtered.length - 1) {

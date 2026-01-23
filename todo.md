@@ -10,15 +10,18 @@ Make manual select plot/sensor/exp etc be based on a ddb table not from what exi
 
 
 ui improvemnt: 
-notification right corner when i item successfuly got moved from draft to id to done to display. pling notification. 
 
 auto start the view upload instantly not wait for user to click on the upload button. 
 (means we can remove the "staged" mark etc)
 
 workshop better/more clear naming for "id" and "done" 
 
+
+
 Highlight EDITOR reconsider layout for right aside. 
 reconsider showing the status draft/id/done/display within the table. (lasat update: Andrew "keep" )
+
+
 
 Talk about how to solve iucn not including domesticated aniamls (cats/cows)
 Problem - user must selec from the iucn list inorder to lable a species (blocker- cant move to "done")

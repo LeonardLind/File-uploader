@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { deriveStatus } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
 import { HexLoader } from "./HexLoader";
+import { useToast } from "./ToastProvider";
 
 type Props = {
   file: MetadataItem;
@@ -192,6 +193,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   const suppressFrameCaptureRef = useRef(false);
   const effectiveStage = deriveStatus(file);
   const showIdActions = effectiveStage === "done";
+  const { notify } = useToast();
 
   const videoUrl = `https://${bucket}.s3.amazonaws.com/${file.fileId}`;
   const hasExistingHighlightAssets = Boolean(file.highlightFileId || file.highlightThumbnailId);
@@ -573,9 +575,19 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
         highlightFileId,
         updatedAt: new Date().toISOString(),
       });
+      notify({
+        title: "Highlight updated",
+        message: "Trimmed video and thumbnail saved.",
+        tone: "success",
+      });
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save highlight settings");
+      notify({
+        title: "Highlight save failed",
+        message: err instanceof Error ? err.message : "Failed to save highlight settings.",
+        tone: "error",
+      });
     } finally {
       setSaving(false);
     }
@@ -620,9 +632,15 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
         highlightThumbnailId: undefined,
         updatedAt: new Date().toISOString(),
       });
+      notify({ title: "Reverted to ID", message: "Item moved to ID.", tone: "info" });
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to revert to ID");
+      notify({
+        title: "Revert failed",
+        message: err instanceof Error ? err.message : "Failed to revert to ID.",
+        tone: "error",
+      });
     } finally {
       setRevertingToId(false);
     }
@@ -666,9 +684,15 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
         highlightThumbnailId: undefined,
         updatedAt: new Date().toISOString(),
       });
+      notify({ title: "Highlight deleted", message: "Item moved back to Done.", tone: "info" });
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to delete highlight");
+      notify({
+        title: "Delete failed",
+        message: err instanceof Error ? err.message : "Failed to delete highlight assets.",
+        tone: "error",
+      });
     } finally {
       setDeleting(false);
     }
@@ -724,9 +748,15 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
         highlightThumbnailId: undefined,
         updatedAt: new Date().toISOString(),
       });
+      notify({ title: "Reverted to Done", message: "Highlight removed and item moved to Done.", tone: "info" });
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to revert highlight");
+      notify({
+        title: "Revert failed",
+        message: err instanceof Error ? err.message : "Failed to revert highlight.",
+        tone: "error",
+      });
     } finally {
       setReverting(false);
     }

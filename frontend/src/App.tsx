@@ -3,20 +3,23 @@ import { TopNav } from "./components/TopNav";
 import { GalleryPage } from "./routes/GalleryPage";
 import { UploadPage } from "./routes/UploadPage";
 import { ImageStoreProvider } from "./state/useImageStore";
+import { ToastProvider } from "./components/ToastProvider";
 
 export default function App() {
   return (
     <BrowserRouter>
       <ImageStoreProvider>
-        <div className="min-h-screen bg-neutral-950 text-white">
-          <TopNav />
-          <Routes>
-            <Route path="/" element={<Navigate to="/gallery?view=draft" replace />} />
-            <Route path="/gallery" element={<GalleryPage />} />
-            <Route path="/upload" element={<UploadPage />} />
-            <Route path="*" element={<Navigate to="/gallery?view=draft" replace />} />
-          </Routes>
-        </div>
+        <ToastProvider>
+          <div className="min-h-screen bg-neutral-950 text-white">
+            <TopNav />
+            <Routes>
+              <Route path="/" element={<Navigate to="/gallery?view=draft" replace />} />
+              <Route path="/gallery" element={<GalleryPage />} />
+              <Route path="/upload" element={<UploadPage />} />
+              <Route path="*" element={<Navigate to="/gallery?view=draft" replace />} />
+            </Routes>
+          </div>
+        </ToastProvider>
       </ImageStoreProvider>
     </BrowserRouter>
   );
