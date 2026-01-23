@@ -44,13 +44,14 @@ type IucnSuggestion = {
 
 const MIN_SPECIES_QUERY = 3;
 const SPECIES_DEBOUNCE_MS = 250;
+type FieldKey = "species" | "plot" | "experiencePoint" | "sensorId" | "deploymentId" | "idState";
 
 export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, onDelete, onAlert, currentView }: EditPaneProps) {
   const defaultStage = useMemo<Status>(() => {
     if (currentView === "draft") return "id";
     if (currentView === "id") return "done";
-    if (currentView === "done") return "display";
-    return deriveStatus(file);
+    if (currentView === "done") return "done";
+    return deriveStatus(file) === "display" ? "done" : deriveStatus(file);
   }, [currentView, file]);
 
   const [species, setSpecies] = useState(file.species ?? "");
@@ -69,12 +70,12 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
   const [speciesError, setSpeciesError] = useState<string | null>(null);
   const [speciesHint, setSpeciesHint] = useState<string | null>(null);
   const [speciesSelectedFromIucn, setSpeciesSelectedFromIucn] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
 
   const locked = deriveStatus(file) === "display";
   const allFieldsFilled = [species, plot, experiencePoint, sensorId, deploymentId].every(
     (val) => !!val && val.trim() !== ""
   );
-  const canSetDisplayStage = idState === "Confirmed" && allFieldsFilled;
 
   useEffect(() => {
     setSpecies(file.species ?? "");
@@ -92,13 +93,8 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
     setSpeciesError(null);
     setSpeciesHint(null);
     setSpeciesSelectedFromIucn(false);
+    setFieldErrors({});
   }, [file, defaultStage]);
-
-  useEffect(() => {
-    if (status === "display" && !canSetDisplayStage) {
-      setStatus("done");
-    }
-  }, [status, canSetDisplayStage]);
 
   const speciesQuery = species.trim();
   const filteredSuggestions = useMemo(() => {
@@ -170,17 +166,64 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
     setSpecies(item.scientific_name);
     setSpeciesSelectedFromIucn(true);
     setSpeciesOpen(false);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.species;
+      return next;
+    });
   };
 
+  const clearFieldError = (key: FieldKey) =>
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
+  const markErrors = (entries: [FieldKey, string][]) => {
+    if (!entries.length) return;
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      entries.forEach(([field, message]) => {
+        next[field] = message;
+      });
+      return next;
+    });
+  };
+
+  const errorClass = (key: FieldKey) =>
+    fieldErrors[key] ? "border-red-500 ring-1 ring-red-500/60" : "";
+
   const save = () => {
+    setFieldErrors({});
     const payloadIdState = idState || "Unknown";
     const currentStatus = deriveStatus(file);
-    if (
-      (status === "done" || status === "display") &&
-      !speciesSelectedFromIucn &&
-      currentStatus !== "done" &&
-      currentStatus !== "display"
-    ) {
+    const requiredFields: [FieldKey, string][] = [];
+    (["species", "plot", "experiencePoint", "sensorId", "deploymentId"] as FieldKey[]).forEach((key) => {
+      const value = { species, plot, experiencePoint, sensorId, deploymentId }[key];
+      if (!value || !value.trim()) {
+        requiredFields.push([key, "Required field"]);
+      }
+    });
+    if (status === "done") {
+      const stageErrors: [FieldKey, string][] = [...requiredFields];
+      if (!speciesSelectedFromIucn && currentStatus !== "done" && currentStatus !== "display") {
+        stageErrors.push(["species", "Select a Latin name from the IUCN lookup"]);
+      }
+      if (payloadIdState !== "Confirmed") {
+        stageErrors.push(["idState", "Set ID State to Confirmed"]);
+      }
+      if (stageErrors.length) {
+        markErrors(stageErrors);
+        onAlert(
+          "Incomplete for Done",
+          "Fill all fields, set ID State to Confirmed, and pick the Latin name from IUCN."
+        );
+        return;
+      }
+    }
+    if (status === "done" && !speciesSelectedFromIucn && currentStatus !== "done" && currentStatus !== "display") {
       onAlert("Latin name required", "Select a Latin name from the IUCN lookup before moving to Done.");
       return;
     }
@@ -193,7 +236,7 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
       status,
       id_state: payloadIdState,
       displayState: active ? "Active" : "Inactive",
-      highlight: status === "display",
+      highlight: false,
     });
   };
 
@@ -273,19 +316,23 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
                 value={species}
                 onChange={(e) => {
                   setSpecies(e.target.value);
-                  setSpeciesSelectedFromIucn(false);
-                  setSpeciesOpen(true);
-                }}
-                onFocus={() => {
-                  if (!locked) setSpeciesOpen(true);
-                }}
+    setSpeciesSelectedFromIucn(false);
+    setSpeciesOpen(true);
+    clearFieldError("species");
+  }}
+  onFocus={() => {
+    if (!locked) setSpeciesOpen(true);
+  }}
                 onBlur={() => {
                   setTimeout(() => setSpeciesOpen(false), 120);
                 }}
-                className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.5 text-[11px] md:text-[12px] text-white"
+                className={`w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.5 text-[11px] md:text-[12px] text-white ${errorClass("species")}`}
                 placeholder="Enter species"
                 disabled={locked}
               />
+              {fieldErrors.species && (
+                <p className="text-[10px] text-red-400 mt-1">{fieldErrors.species}</p>
+              )}
               {speciesOpen && !locked && speciesQuery.length >= MIN_SPECIES_QUERY && (
                 <div className="absolute z-20 mt-1 w-full rounded-md border border-slate-700 bg-neutral-900 shadow-lg max-h-48 overflow-y-auto custom-scroll">
                   {speciesLoading && (
@@ -335,7 +382,7 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
                 const nextStatus = e.target.value as Status;
                 const currentStatus = deriveStatus(file);
                 if (
-                  (nextStatus === "done" || nextStatus === "display") &&
+                  nextStatus === "done" &&
                   !speciesSelectedFromIucn &&
                   currentStatus !== "done" &&
                   currentStatus !== "display"
@@ -343,11 +390,18 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
                   onAlert("Latin name required", "Select a Latin name from the IUCN lookup before moving to Done.");
                   return;
                 }
-                if ((nextStatus === "done" || nextStatus === "display") && (!canSetDisplayStage || idState !== "Confirmed")) {
+                if (nextStatus === "done" && (!allFieldsFilled || idState !== "Confirmed")) {
+                  const stageErrors: [FieldKey, string][] = [];
+                  (["species", "plot", "experiencePoint", "sensorId", "deploymentId"] as FieldKey[]).forEach((key) => {
+                    const value = { species, plot, experiencePoint, sensorId, deploymentId }[key];
+                    if (!value || !value.trim()) {
+                      stageErrors.push([key, "Required for this stage"]);
+                    }
+                  });
+                  if (idState !== "Confirmed") stageErrors.push(["idState", "Must be Confirmed"]);
+                  markErrors(stageErrors);
                   onAlert(
-                    nextStatus === "done"
-                      ? "Done requires confirmed metadata"
-                      : "Display requires confirmed metadata",
+                    "Done requires confirmed metadata",
                     "All fields must be filled and ID State must be Confirmed before moving to this stage."
                   );
                   return;
@@ -358,11 +412,8 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
             >
               <option value="draft">Draft</option>
               <option value="id">ID</option>
-              <option value="done" disabled={!canSetDisplayStage || idState !== "Confirmed"}>
+              <option value="done" disabled={!allFieldsFilled || idState !== "Confirmed"}>
                 Done
-              </option>
-              <option value="display" disabled={!canSetDisplayStage || idState !== "Confirmed"}>
-                Display
               </option>
             </select>
           </div>
@@ -370,8 +421,11 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
             <label className="text-[11px] text-slate-400">ID State</label>
             <select
               value={idState}
-              onChange={(e) => setIdState(e.target.value)}
-              className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white"
+              onChange={(e) => {
+                setIdState(e.target.value);
+                clearFieldError("idState");
+              }}
+              className={`w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white ${errorClass("idState")}`}
             >
               {["Unknown", "Genus", "AI ID", "Guess", "Confirmed"].map((opt) => (
                 <option key={opt} value={opt}>
@@ -379,13 +433,19 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
                 </option>
               ))}
             </select>
+            {fieldErrors.idState && (
+              <p className="text-[10px] text-red-400">{fieldErrors.idState}</p>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Plot</label>
             <select
               value={plot}
-              onChange={(e) => setPlot(e.target.value)}
-              className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white"
+              onChange={(e) => {
+                setPlot(e.target.value);
+                clearFieldError("plot");
+              }}
+              className={`w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white ${errorClass("plot")}`}
               disabled={locked}
             >
               <option value="">Select plot</option>
@@ -395,13 +455,17 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
                 </option>
               ))}
             </select>
+            {fieldErrors.plot && <p className="text-[10px] text-red-400">{fieldErrors.plot}</p>}
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Experience</label>
             <select
               value={experiencePoint}
-              onChange={(e) => setExperiencePoint(e.target.value)}
-              className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white"
+              onChange={(e) => {
+                setExperiencePoint(e.target.value);
+                clearFieldError("experiencePoint");
+              }}
+              className={`w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white ${errorClass("experiencePoint")}`}
               disabled={locked}
             >
               <option value="">Select experience</option>
@@ -411,13 +475,19 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
                 </option>
               ))}
             </select>
+            {fieldErrors.experiencePoint && (
+              <p className="text-[10px] text-red-400">{fieldErrors.experiencePoint}</p>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Sensor</label>
             <select
               value={sensorId}
-              onChange={(e) => setSensorId(e.target.value)}
-              className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white"
+              onChange={(e) => {
+                setSensorId(e.target.value);
+                clearFieldError("sensorId");
+              }}
+              className={`w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white ${errorClass("sensorId")}`}
               disabled={locked}
             >
               <option value="">Select sensor</option>
@@ -427,13 +497,19 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
                 </option>
               ))}
             </select>
+            {fieldErrors.sensorId && (
+              <p className="text-[10px] text-red-400">{fieldErrors.sensorId}</p>
+            )}
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[11px] text-slate-400">Deployment</label>
             <select
               value={deploymentId}
-              onChange={(e) => setDeploymentId(e.target.value)}
-              className="w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white"
+              onChange={(e) => {
+                setDeploymentId(e.target.value);
+                clearFieldError("deploymentId");
+              }}
+              className={`w-full bg-neutral-800 border border-slate-700 rounded-md px-2 py-1.25 text-[11px] md:text-[12px] text-white ${errorClass("deploymentId")}`}
               disabled={locked}
             >
               <option value="">Select deployment</option>
@@ -443,18 +519,10 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
                 </option>
               ))}
             </select>
+            {fieldErrors.deploymentId && (
+              <p className="text-[10px] text-red-400">{fieldErrors.deploymentId}</p>
+            )}
           </div>
-          {status === "display" && (
-            <label className="flex items-center gap-2 text-[11px] text-slate-400">
-              <input
-                type="checkbox"
-                checked={active}
-                onChange={(e) => setActive(e.target.checked)}
-                className="h-4 w-4 accent-lime-400"
-              />
-              Active
-            </label>
-          )}
         </aside>
       </div>
     </div>

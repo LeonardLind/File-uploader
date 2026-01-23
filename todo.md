@@ -1,8 +1,21 @@
 consider adding iNaturalist api for prefix search (iucn does not provide it) (Go ahead and give it a try)
 
+clean up iucnController.mts now when we not doing common name or prefix with iucn. 
+
+see if we can work on responivnes that amount of items shown in the list is based on what the persons viewhigt is. so if it fits more then 7 items without needing to scroll then we wanna show more but avoid getting the scrollbar = show less item per peg and we can have default at 7 because that should work on smaller laptops. 
+
 Make undantag for animals that doesnt exist in the iucn api such a domesticated animals (cats/cows)
 
 Make manual select plot/sensor/exp etc be based on a ddb table not from what exist in the table atm 
+
+
+ui improvemnt: 
+notification right corner when i item successfuly got moved from draft to id to done to display. pling notification. 
+
+auto start the view upload instantly not wait for user to click on the upload button. 
+(means we can remove the "staged" mark etc)
+
+workshop better/more clear naming for "id" and "done" 
 
 Highlight EDITOR reconsider layout for right aside. 
 reconsider showing the status draft/id/done/display within the table. (lasat update: Andrew "keep" )

@@ -122,7 +122,6 @@ export function TopNav() {
           <div className="flex items-center gap-3 sm:gap-4 text-slate-300">
             <button
               onClick={() => setSummaryOpen(true)}
-              title="View confirmed species"
               className={`group flex items-center gap-2 bg-neutral-800 border rounded-md px-2.5 py-1.5 transition text-sm ${
                 summaryOpen ? "border-lime-400" : "border-slate-700 hover:border-lime-400"
               }`}
@@ -147,7 +146,6 @@ export function TopNav() {
             </button>
             <button
               onClick={() => navigate("/upload")}
-              title="Manual upload"
               className={`group flex items-center gap-2 bg-neutral-800 border rounded-md px-2.5 py-1.5 transition text-sm ${
                 isUpload ? "border-lime-400" : "border-slate-700 hover:border-lime-400"
               }`}

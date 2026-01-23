@@ -12,7 +12,6 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Routes
 app.use("/api/upload", uploadRoutes);
 app.use("/api/iucn", iucnRoutes);
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useImageStore } from "../state/useImageStore";
 import { FileDropzone } from "../components/FileDropzone";
 import backgroundImage from "../assets/forst.png";
@@ -15,6 +16,7 @@ export function UploadPage() {
   const { images, updateImage } = useImageStore();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [uploadingAll, setUploadingAll] = useState(false);
+  const navigate = useNavigate();
 
   const API_URL = import.meta.env.VITE_API_URL;
 
@@ -40,6 +42,7 @@ export function UploadPage() {
   const total = uploadedFiles.length;
   const done = uploadedFiles.filter((f) => f.done).length;
   const hasUploads = total > 0;
+  const hasReady = done > 0;
   const anyUploading = useMemo(() => uploadedFiles.some((f) => f.uploading), [uploadedFiles]);
   const filesToRender = useMemo(() => {
     const orderMap = new Map(uploadedFiles.map((f, idx) => [f.id, idx]));
@@ -221,18 +224,28 @@ export function UploadPage() {
                   files
                 </div>
 
-                <button
-                  onClick={handleUploadAll}
-                  disabled={!unsaved.length || anyUploading || uploadingAll}
-                  className="
-                    bg-lime-400 text-neutral-900 font-semibold rounded-md
-                    px-3 py-2
-                    hover:bg-lime-300 transition text-xs sm:text-sm
-                    disabled:cursor-not-allowed
-                  "
-                >
-                  {anyUploading || uploadingAll ? "Uploading..." : "Upload"}
-                </button>
+                <div className="flex items-center gap-2">
+                  {hasReady && (
+                    <button
+                      onClick={() => navigate("/gallery?view=draft")}
+                      className="px-3 py-2 text-xs sm:text-sm rounded-md border border-slate-700 text-white hover:border-lime-400 hover:text-white transition bg-neutral-800"
+                    >
+                      View in draft
+                    </button>
+                  )}
+                  <button
+                    onClick={handleUploadAll}
+                    disabled={!unsaved.length || anyUploading || uploadingAll}
+                    className="
+                      bg-lime-400 text-neutral-900 font-semibold rounded-md
+                      px-3 py-2
+                      hover:bg-lime-300 transition text-xs sm:text-sm
+                      disabled:cursor-not-allowed
+                    "
+                  >
+                    {anyUploading || uploadingAll ? "Uploading..." : "Upload"}
+                  </button>
+                </div>
               </div>
             </section>
           )}
