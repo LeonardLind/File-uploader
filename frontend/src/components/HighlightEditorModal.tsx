@@ -949,9 +949,9 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
                 <h3 className="text-sm sm:text-base 2xl:text-lg font-semibold text-white">Replace existing highlight?</h3>
                 <button
                   onClick={() => setShowReplacePrompt(false)}
-                  className="px-3 py-1 text-[11px] sm:text-sm 2xl:px-3.5 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
+                  className="px-2.5 py-1 text-sm rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
                 >
-                  Close
+                  ✕
                 </button>
               </div>
 
@@ -986,12 +986,6 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
               )}
 
               <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowReplacePrompt(false)}
-                  className="px-3 py-1.5 sm:px-3.5 sm:py-2 lg:px-4 lg:py-2 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition text-[11px] sm:text-sm"
-                >
-                  Go back
-                </button>
                 <button
                   onClick={() => {
                     setShowReplacePrompt(false);

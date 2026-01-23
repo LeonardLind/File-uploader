@@ -56,6 +56,10 @@ export function GalleryFilterBar({
     layout === "grid"
       ? "bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1 text-xs sm:text-sm h-7 sm:h-8 w-full"
       : "bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1 text-xs sm:text-sm h-7 sm:h-8 flex-1 min-w-[9rem]";
+  const inputClass =
+    layout === "grid"
+      ? "bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1 text-xs sm:text-sm h-7 sm:h-8 w-full"
+      : "bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1 text-xs sm:text-sm h-7 sm:h-8 flex-1 min-w-[9rem]";
   const sortClass =
     layout === "grid"
       ? "bg-neutral-800 text-slate-200 border border-slate-700 rounded-md px-2.5 py-1 text-xs sm:text-sm h-7 sm:h-8 w-full"
@@ -70,23 +74,44 @@ export function GalleryFilterBar({
   return (
     <div className={wrapperClass}>
       <div className={filtersClass}>
-        {filterFields.map(([key, label], index) => (
-          <select
-            key={key}
-            value={filters[key as keyof Filters] || ""}
-            onChange={(e) => onChange(key as keyof Filters, e.target.value)}
-            className={`${selectClass} ${gridSpanFor(index)}`}
-          >
-            <option value="">{label}</option>
-            {uniqueValues[key as keyof UniqueValues]
-              .filter(Boolean)
-              .map((val) => (
-                <option key={val} value={val}>
-                  {val}
-                </option>
-              ))}
-          </select>
-        ))}
+        {filterFields.map(([key, label], index) => {
+          const filterKey = key as keyof Filters;
+          const spanClass = gridSpanFor(index);
+          const value = filters[filterKey] || "";
+
+          if (key === "species") {
+            return (
+              <input
+                key={key}
+                type="search"
+                value={value}
+                onChange={(e) => onChange(filterKey, e.target.value)}
+                placeholder="Search species"
+                className={`${inputClass} ${spanClass}`}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            );
+          }
+
+          return (
+            <select
+              key={key}
+              value={value}
+              onChange={(e) => onChange(filterKey, e.target.value)}
+              className={`${selectClass} ${spanClass}`}
+            >
+              <option value="">{label}</option>
+              {uniqueValues[key as keyof UniqueValues]
+                .filter(Boolean)
+                .map((val) => (
+                  <option key={val} value={val}>
+                    {val}
+                  </option>
+                ))}
+            </select>
+          );
+        })}
 
         <select
           value={filters.updatedSort}

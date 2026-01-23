@@ -31,13 +31,23 @@ export function useFilteredMetadata(
   const filtered = useMemo(() => {
     let result = [...files];
 
-    Object.entries(filters).forEach(([key, value]) => {
-      if (key !== "updatedSort" && value) {
-        result = result.filter((f) => {
-          const candidate = f[key as keyof MetadataItem];
-          return typeof candidate === "string" && candidate.toLowerCase() === value.toLowerCase();
-        });
-      }
+    Object.entries(filters).forEach(([key, rawValue]) => {
+      if (key === "updatedSort") return;
+      const value = typeof rawValue === "string" ? rawValue.trim() : "";
+      if (!value) return;
+
+      result = result.filter((f) => {
+        const candidate = f[key as keyof MetadataItem];
+        if (typeof candidate !== "string") return false;
+        const candidateValue = candidate.toLowerCase();
+        const searchValue = value.toLowerCase();
+
+        if (key === "species") {
+          return candidateValue.startsWith(searchValue);
+        }
+
+        return candidateValue === searchValue;
+      });
     });
 
     if (view === "id") {
