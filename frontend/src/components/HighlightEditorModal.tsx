@@ -584,7 +584,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   const handleRevertToId = async () => {
     const confirmed = await requestConfirm({
       title: "Revert to ID?",
-      message: "This will move the item back to ID and remove highlight status.",
+      message: "This will move the item back to ID stage.",
       confirmLabel: "Yes, revert",
       cancelLabel: "Cancel",
       tone: "danger",
