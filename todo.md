@@ -1,5 +1,7 @@
 consider adding iNaturalist api for prefix search (iucn does not provide it) (Go ahead and give it a try)
 
+adjust the pagnation buffer to how many itmes calc, check for draft/id/done for when default and when filters are toggle and same for display. 
+
 clean up iucnController.mts now when we not doing common name or prefix with iucn. 
 
 Make undantag for animals that doesnt exist in the iucn api such a domesticated animals (cats/cows)

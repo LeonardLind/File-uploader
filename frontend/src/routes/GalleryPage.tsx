@@ -123,6 +123,11 @@ export function GalleryPage() {
       setFiles((prev) => prev.filter((f) => f.fileId !== fileId));
       setEditing((prev) => (prev?.fileId === fileId ? null : prev));
       setHighlightEditor((prev) => (prev?.fileId === fileId ? null : prev));
+      notify({
+        title: "Item removed",
+        message: "Item was successfully deleted.",
+        tone: "info",
+      });
     } catch (err: unknown) {
       console.error("Delete failed", err);
       requestAlert({
@@ -301,7 +306,10 @@ export function GalleryPage() {
       const container = tableContainerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const bottomBuffer = view === "display" ? 10 : 75;
+      const filterOpen = mainFiltersOpen && !useSidebarLayout;
+      const bottomBuffer = view === "display"
+        ? (filterOpen ? 160 : 36)
+        : (filterOpen ? 120 : 56);
       const available = window.innerHeight - rect.top - bottomBuffer;
       const thead = container.querySelector("thead");
       const headerHeight = thead ? thead.getBoundingClientRect().height : 44;
@@ -318,7 +326,7 @@ export function GalleryPage() {
     const handleResize = () => window.requestAnimationFrame(measure);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [useSidebarLayout, computedItemsPerPage, view, filtered.length]);
+  }, [useSidebarLayout, computedItemsPerPage, view, filtered.length, mainFiltersOpen]);
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);

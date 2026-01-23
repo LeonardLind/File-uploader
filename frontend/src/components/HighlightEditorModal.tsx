@@ -684,7 +684,7 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
         highlightThumbnailId: undefined,
         updatedAt: new Date().toISOString(),
       });
-      notify({ title: "Highlight deleted", message: "Item moved back to Done.", tone: "info" });
+      notify({ title: "Item removed", message: "Item was successfully deleted.", tone: "info" });
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to delete highlight");
