@@ -2,8 +2,6 @@ consider adding iNaturalist api for prefix search (iucn does not provide it) (Go
 
 clean up iucnController.mts now when we not doing common name or prefix with iucn. 
 
-see if we can work on responivnes that amount of items shown in the list is based on what the persons viewhigt is. so if it fits more then 7 items without needing to scroll then we wanna show more but avoid getting the scrollbar = show less item per peg and we can have default at 7 because that should work on smaller laptops. 
-
 Make undantag for animals that doesnt exist in the iucn api such a domesticated animals (cats/cows)
 
 Make manual select plot/sensor/exp etc be based on a ddb table not from what exist in the table atm 
@@ -11,8 +9,7 @@ Make manual select plot/sensor/exp etc be based on a ddb table not from what exi
 
 ui improvemnt: 
 
-auto start the view upload instantly not wait for user to click on the upload button. 
-(means we can remove the "staged" mark etc)
+auto start the view upload instantly not wait for user to click on the upload button. (maybe loading animation instead of the "upload btn" )
 
 workshop better/more clear naming for "id" and "done" 
 
