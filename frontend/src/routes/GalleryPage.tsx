@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { HighlightEditorModal } from "../components/HighlightEditorModal";
 import { GalleryFilterBar } from "../components/GalleryFilterBar";
@@ -53,10 +53,12 @@ export function GalleryPage() {
   const { filtered, view } = useFilteredMetadata(files, filters, location.search);
   useKeyboardNavigation(editing, filtered, setEditing);
   const { notify } = useToast();
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
   const isSidebarLayout = view === "draft" || view === "id";
   const useSidebarLayout = isSidebarLayout && !!editing;
-  const itemsPerPage = useSidebarLayout ? 10 : 7;
+  const [computedItemsPerPage, setComputedItemsPerPage] = useState(7);
+  const itemsPerPage = useSidebarLayout ? 10 : computedItemsPerPage;
 
   const uniqueValues = useMemo(() => {
     const getUnique = (key: keyof MetadataItem) =>
@@ -290,6 +292,34 @@ export function GalleryPage() {
     setCurrentPage(1);
   }, [filtered, itemsPerPage]);
 
+  useEffect(() => {
+    if (useSidebarLayout) {
+      setComputedItemsPerPage(10);
+      return;
+    }
+    const measure = () => {
+      const container = tableContainerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const bottomBuffer = view === "display" ? 10 : 75;
+      const available = window.innerHeight - rect.top - bottomBuffer;
+      const thead = container.querySelector("thead");
+      const headerHeight = thead ? thead.getBoundingClientRect().height : 44;
+      const firstRow = container.querySelector("tbody tr");
+      const fallbackRowHeight = view === "display" ? 96 : 52;
+      const rowHeight = firstRow ? firstRow.getBoundingClientRect().height : fallbackRowHeight;
+      const rowsThatFit = Math.floor((available - headerHeight) / rowHeight);
+      const next = Math.max(5, Math.min(rowsThatFit, 50));
+      if (Number.isFinite(next) && next !== computedItemsPerPage) {
+        setComputedItemsPerPage(next);
+      }
+    };
+    measure();
+    const handleResize = () => window.requestAnimationFrame(measure);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [useSidebarLayout, computedItemsPerPage, view, filtered.length]);
+
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
@@ -487,7 +517,7 @@ export function GalleryPage() {
                 </div>
               )}
 
-              <div className="w-full">
+              <div className="w-full" ref={tableContainerRef}>
                 <div className="overflow-x-auto rounded-lg border border-slate-800 bg-neutral-900 shadow-md custom-scroll">
                   <table className="min-w-full text-xs sm:text-sm text-slate-300 border-collapse">
                     <thead className="bg-neutral-800 text-slate-100 text-left uppercase text-[10px] sm:text-xs tracking-wide">
