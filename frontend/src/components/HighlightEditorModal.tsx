@@ -3,10 +3,10 @@ import { deriveStatus } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
 import { HexLoader } from "./HexLoader";
 import { useToast } from "./ToastProvider";
+import { fetchSignedUrl } from "../utils/signedUrl";
 
 type Props = {
   file: MetadataItem;
-  bucket: string;
   apiUrl: string;
   onClose: () => void;
   onSaved: (updates: Partial<MetadataItem>) => void;
@@ -170,7 +170,7 @@ function dataUrlToBlob(dataUrl: string) {
   return new Blob([array], { type: mime });
 }
 
-export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, requestConfirm }: Props) {
+export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestConfirm }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [trimStart, setTrimStart] = useState<number>(file.trimStartSec ?? 0);
@@ -189,13 +189,13 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
   const [isRecording, setIsRecording] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [highlightVideoExists, setHighlightVideoExists] = useState<boolean | null>(null);
   const suppressFrameCaptureRef = useRef(false);
   const effectiveStage = deriveStatus(file);
   const showIdActions = effectiveStage === "done";
   const { notify } = useToast();
 
-  const videoUrl = `https://${bucket}.s3.amazonaws.com/${file.fileId}`;
   const hasExistingHighlightAssets = Boolean(file.highlightFileId || file.highlightThumbnailId);
   const existingHighlightVideo =
     highlightVideoExists ?? Boolean(file.highlightFileId);
@@ -313,7 +313,38 @@ export function HighlightEditorModal({ file, bucket, apiUrl, onClose, onSaved, r
     setVideoLoading(true);
     setVideoDuration(null);
     setHighlightVideoExists(null);
+    setVideoUrl(null);
   }, [file.fileId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setVideoLoading(true);
+    setVideoUrl(null);
+
+    (async () => {
+      try {
+        const url = await fetchSignedUrl({
+          apiUrl,
+          key: file.fileId,
+          type: "default",
+          signal: controller.signal,
+        });
+        if (!active) return;
+        setVideoUrl(url);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          console.warn("Failed to load signed video URL", err);
+          setVideoLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [apiUrl, file.fileId]);
 
   useEffect(() => {
     if (!file.highlightFileId) {

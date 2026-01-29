@@ -14,6 +14,7 @@ import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
 import { deriveStatus, type Status } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
 import { useToast } from "../components/ToastProvider";
+import { fetchSignedUrl } from "../utils/signedUrl";
 
 const statusStyles: Record<Status, { bg: string; text: string; label: string }> = {
   draft: { bg: "bg-slate-700", text: "text-white", label: "Draft" },
@@ -31,6 +32,7 @@ export function GalleryPage() {
   const [highlightAvailability, setHighlightAvailability] = useState<
     Record<string, { highlightFileId?: string; exists: boolean }>
   >({});
+  const [signedThumbUrls, setSignedThumbUrls] = useState<Record<string, string>>({});
 
   const [filters, setFilters] = useState({
     species: "",
@@ -45,8 +47,6 @@ export function GalleryPage() {
   const [currentPage, setCurrentPage] = useState(1);
 
   const API_URL = import.meta.env.VITE_API_URL;
-  const BUCKET_NAME = import.meta.env.VITE_AWS_BUCKET;
-  const HIGHLIGHT_BUCKET = import.meta.env.VITE_AWS_HIGHLIGHT_BUCKET || BUCKET_NAME;
   const location = useLocation();
   const { confirmState, setConfirmState, requestConfirm, requestAlert } = useConfirmDialog();
   const { files, setFiles, loading, error } = useMetadata(API_URL);
@@ -385,6 +385,53 @@ export function GalleryPage() {
     return () => controller.abort();
   }, [API_URL, paginatedItems, view]);
 
+  useEffect(() => {
+    if (view !== "display") {
+      setSignedThumbUrls((prev) => (Object.keys(prev).length ? {} : prev));
+      return;
+    }
+
+    const controller = new AbortController();
+    const targets = paginatedItems
+      .map((item) => {
+        const key = item.highlightThumbnailId || item.thumbnailId;
+        if (!key) return null;
+        const type = item.highlightThumbnailId ? "highlight" : "default";
+        const cacheKey = `${type}:${key}`;
+        if (signedThumbUrls[cacheKey]) return null;
+        return { key, type, cacheKey };
+      })
+      .filter(Boolean) as Array<{ key: string; type: "default" | "highlight"; cacheKey: string }>;
+
+    if (!targets.length) return () => controller.abort();
+
+    (async () => {
+      const updates: Record<string, string> = {};
+      await Promise.all(
+        targets.map(async ({ key, type, cacheKey }) => {
+          try {
+            const url = await fetchSignedUrl({
+              apiUrl: API_URL,
+              key,
+              type,
+              signal: controller.signal,
+            });
+            updates[cacheKey] = url;
+          } catch (err) {
+            if (!controller.signal.aborted) {
+              console.warn("Failed to load signed thumbnail URL", err);
+            }
+          }
+        })
+      );
+
+      if (controller.signal.aborted || Object.keys(updates).length === 0) return;
+      setSignedThumbUrls((prev) => ({ ...prev, ...updates }));
+    })();
+
+    return () => controller.abort();
+  }, [API_URL, paginatedItems, signedThumbUrls, view]);
+
   if (loading) {
     return (
       <div className="flex flex-col w-full min-h-screen bg-neutral-950 text-white">
@@ -487,7 +534,6 @@ export function GalleryPage() {
                 {editing ? (
                   <EditPane
                     file={editing}
-                    bucket={BUCKET_NAME}
                     apiUrl={API_URL}
                     currentView={view}
                     uniqueValues={uniqueValues}
@@ -511,7 +557,6 @@ export function GalleryPage() {
                 <div className="w-full">
                   <EditPane
                     file={editing}
-                    bucket={BUCKET_NAME}
                     apiUrl={API_URL}
                     currentView={view}
                     uniqueValues={uniqueValues}
@@ -556,6 +601,10 @@ export function GalleryPage() {
                           trimmedAvailability && trimmedAvailability.highlightFileId === file.highlightFileId
                             ? trimmedAvailability.exists
                             : Boolean(file.highlightFileId && file.highlightThumbnailId);
+                        const thumbKey = file.highlightThumbnailId || file.thumbnailId;
+                        const thumbType = file.highlightThumbnailId ? "highlight" : "default";
+                        const thumbCacheKey = thumbKey ? `${thumbType}:${thumbKey}` : null;
+                        const thumbUrl = thumbCacheKey ? signedThumbUrls[thumbCacheKey] : null;
 
                         return (
                           <tr
@@ -593,13 +642,19 @@ export function GalleryPage() {
 
                             {view === "display" && (
                               <td className="px-3 py-2">
-                                {file.highlightThumbnailId || file.thumbnailId ? (
-                                  <img
-                                    src={`https://${file.highlightThumbnailId ? HIGHLIGHT_BUCKET : BUCKET_NAME}.s3.amazonaws.com/${file.highlightThumbnailId || file.thumbnailId}`}
-                                    alt="thumbnail"
-                                    className="w-20 h-14 sm:w-24 sm:h-16 object-cover rounded-md border border-slate-700"
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
+                                {thumbKey ? (
+                                  thumbUrl ? (
+                                    <img
+                                      src={thumbUrl}
+                                      alt="thumbnail"
+                                      className="w-20 h-14 sm:w-24 sm:h-16 object-cover rounded-md border border-slate-700"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  ) : (
+                                    <div className="w-20 h-14 sm:w-24 sm:h-16 rounded-md border border-slate-700 bg-neutral-800 text-[10px] sm:text-xs text-slate-500 flex items-center justify-center">
+                                      Loading...
+                                    </div>
+                                  )
                                 ) : (
                                   <div className="w-20 h-14 sm:w-24 sm:h-16 rounded-md border border-dashed border-slate-700 bg-neutral-900 text-[10px] sm:text-xs text-slate-400 flex items-center justify-center">
                                     No thumbnail yet
@@ -657,7 +712,6 @@ export function GalleryPage() {
       {highlightEditor && (
         <HighlightEditorModal
           file={highlightEditor}
-          bucket={BUCKET_NAME}
           apiUrl={API_URL}
           requestConfirm={requestConfirm}
           onClose={() => setHighlightEditor(null)}

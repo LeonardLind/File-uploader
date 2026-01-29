@@ -2,6 +2,7 @@ import {
   S3Client,
   DeleteObjectCommand,
   HeadObjectCommand,
+  GetObjectCommand,
   type DeleteObjectCommandInput,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
@@ -23,10 +24,23 @@ type PresignInput = {
   Expires?: number; // seconds
 };
 
+type PresignGetInput = {
+  Bucket: string;
+  Key: string;
+  Expires?: number; // seconds
+  ResponseContentType?: string;
+};
+
 export async function getPresignedPutUrl(params: PresignInput): Promise<string> {
   const { Expires, ...rest } = params;
   const expiresIn = Expires ?? 300;
   return getSignedUrl(s3Client, new PutObjectCommand(rest), { expiresIn });
+}
+
+export async function getPresignedGetUrl(params: PresignGetInput): Promise<string> {
+  const { Expires, ...rest } = params;
+  const expiresIn = Expires ?? 300;
+  return getSignedUrl(s3Client, new GetObjectCommand(rest), { expiresIn });
 }
 
 export async function deleteObject(params: DeleteObjectCommandInput): Promise<void> {

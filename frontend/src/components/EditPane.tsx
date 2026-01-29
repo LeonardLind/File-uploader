@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import type { MetadataItem } from "../types/gallery";
 import { deriveStatus, type Status, type ViewFilter } from "../utils/galleryUtils";
 import { HexLoader } from "./HexLoader";
+import { fetchSignedUrl } from "../utils/signedUrl";
 
 type EditPaneProps = {
   file: MetadataItem;
-  bucket: string;
   apiUrl: string;
   uniqueValues: {
     species: string[];
@@ -46,7 +46,7 @@ const MIN_SPECIES_QUERY = 3;
 const SPECIES_DEBOUNCE_MS = 250;
 type FieldKey = "species" | "plot" | "experiencePoint" | "sensorId" | "deploymentId" | "idState";
 
-export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, onDelete, onAlert, currentView }: EditPaneProps) {
+export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete, onAlert, currentView }: EditPaneProps) {
   const defaultStage = useMemo<Status>(() => {
     if (currentView === "draft") return "id";
     if (currentView === "id") return "done";
@@ -64,6 +64,7 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
   const [active, setActive] = useState(file.displayState !== "Inactive");
   const [videoLoading, setVideoLoading] = useState(true);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [speciesSuggestions, setSpeciesSuggestions] = useState<IucnSuggestion[]>([]);
   const [speciesOpen, setSpeciesOpen] = useState(false);
   const [speciesLoading, setSpeciesLoading] = useState(false);
@@ -88,6 +89,7 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
     setActive(file.displayState !== "Inactive");
     setVideoLoading(true);
     setVideoDuration(null);
+    setVideoUrl(null);
     setSpeciesSuggestions([]);
     setSpeciesOpen(false);
     setSpeciesError(null);
@@ -95,6 +97,36 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
     setSpeciesSelectedFromIucn(false);
     setFieldErrors({});
   }, [file, defaultStage]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+    setVideoLoading(true);
+    setVideoUrl(null);
+
+    (async () => {
+      try {
+        const url = await fetchSignedUrl({
+          apiUrl,
+          key: file.fileId,
+          type: "default",
+          signal: controller.signal,
+        });
+        if (!active) return;
+        setVideoUrl(url);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          console.warn("Failed to load signed video URL", err);
+          setVideoLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [apiUrl, file.fileId]);
 
   const speciesQuery = species.trim();
   const filteredSuggestions = useMemo(() => {
@@ -278,7 +310,7 @@ export function EditPane({ file, bucket, apiUrl, uniqueValues, onClose, onSave, 
               </div>
             )}
             <video
-              src={`https://${bucket}.s3.amazonaws.com/${file.fileId}`}
+              src={videoUrl ?? ""}
               controls
               className="w-full h-full object-contain bg-black"
               onLoadedMetadata={(e) => {

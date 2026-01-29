@@ -1,6 +1,7 @@
 import express from "express";
 import {
   generatePresignedUrl,
+  generatePresignedGetUrl,
   saveMetadata,
   getAllMetadata,
   getMetadata,
@@ -16,6 +17,7 @@ const router = express.Router();
 
 // Generate pre-signed S3 URL for direct uploads
 router.post("/presign", generatePresignedUrl);
+router.post("/signed-url", generatePresignedGetUrl);
 
 // Metadata endpoints
 router.post("/metadata", saveMetadata);

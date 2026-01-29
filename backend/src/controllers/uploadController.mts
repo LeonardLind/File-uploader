@@ -7,7 +7,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import type { Request, Response } from "express";
 import { ddb, TABLE_NAME, HIGHLIGHT_TABLE_NAME } from "../aws/dynamo.mjs";
-import { deleteObject, getPresignedPutUrl, objectExists } from "../aws/s3.mjs";
+import { deleteObject, getPresignedGetUrl, getPresignedPutUrl, objectExists } from "../aws/s3.mjs";
 import dotenv from "dotenv";
 
 dotenv.config({ quiet: true });
@@ -269,6 +269,49 @@ export async function generatePresignedUrl(req: Request, res: Response): Promise
     res.json({ success: true, uploadUrl, key });
   } catch (err: unknown) {
     console.error("Error generating presigned URL:", err);
+    res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to generate presigned URL",
+    });
+  }
+}
+
+export async function generatePresignedGetUrl(req: Request, res: Response): Promise<void> {
+  try {
+    const { key, type, expiresIn, responseContentType } = req.body as {
+      key?: string;
+      type?: "default" | "highlight";
+      expiresIn?: number;
+      responseContentType?: string;
+    };
+
+    if (!key) {
+      res.status(400).json({ success: false, error: "Missing key" });
+      return;
+    }
+
+    const bucket =
+      type === "highlight"
+        ? (process.env.AWS_HIGHLIGHT_BUCKET as string) || (process.env.AWS_BUCKET as string)
+        : (process.env.AWS_BUCKET as string);
+
+    if (!bucket) {
+      res.status(500).json({ success: false, error: "Missing target bucket configuration" });
+      return;
+    }
+
+    const expires = typeof expiresIn === "number" && expiresIn > 0 ? expiresIn : 300;
+
+    const signedUrl = await getPresignedGetUrl({
+      Bucket: bucket,
+      Key: key,
+      Expires: expires,
+      ResponseContentType: responseContentType,
+    });
+
+    res.json({ success: true, url: signedUrl, key });
+  } catch (err: unknown) {
+    console.error("Error generating presigned GET URL:", err);
     res.status(500).json({
       success: false,
       error: err instanceof Error ? err.message : "Failed to generate presigned URL",
