@@ -1,35 +1,27 @@
-consider adding iNaturalist api for prefix search (iucn does not provide it) (Go ahead and give it a try)
-
 adjust the pagnation buffer to how many itmes calc, check for draft/id/done for when default and when filters are toggle and same for display. 
 
-clean up iucnController.mts now when we not doing common name or prefix with iucn. 
 
 Make undantag for animals that doesnt exist in the iucn api such a domesticated animals (cats/cows)
+Workaround - Make exeption that either choose from iucn or only "domesticated animal" 
+maybe a pop up with override option? 
 
 Make manual select plot/sensor/exp etc be based on a ddb table not from what exist in the table atm 
 
 
 ui improvemnt: 
-
-auto start the view upload instantly not wait for user to click on the upload button. (maybe loading animation instead of the "upload btn" )
-
-workshop better/more clear naming for "id" and "done" 
-
-
-
+workshop better/more clear naming for "id" and "done" (stina suggestion)
 Highlight EDITOR reconsider layout for right aside. 
-reconsider showing the status draft/id/done/display within the table. (lasat update: Andrew "keep" )
 
 
 
-Talk about how to solve iucn not including domesticated aniamls (cats/cows)
-Problem - user must selec from the iucn list inorder to lable a species (blocker- cant move to "done")
+Questions - worth doing a Pythonscript to cross-check iNaturalist vs IUCN?
 
-question - 
+Answered: 
 Do we wanna downstream domesticated animals? (Andrew- YES!)
 Do we wanna store videos of domesticated animals? (Andrew- YES!)
+iNaturalist & IUCN ONLY NEEDS TO FILTERS FROM MAMMALS AND BIRDS (confirmed by Andrew -"for the camera trap - no we care about them - but they will be impossible to ID. Even Reptiles and amphibians will be very much the outliyer )
+reconsider showing the status draft/id/done/display within the table. (last update: Andrew "keep" )
 
-Workaround - Make exeption that either choose from iucn or only "domesticated animal"  
 
 
 Todo for OVERVIEW FEATURE: last update ( Andrew "put a pin in it")
@@ -41,3 +33,7 @@ consider adding filter in the species summary to filder by threat lvl. or catego
 consider showing data of number of lc, cr, en , vu , ew, ex. was found. 
 consider general filter option like sort big > small etc 
 ]
+
+list of aniamls that i found that exist in Inaturalist but not in iucn:
+Rhinolophus monoceros
+Formosan Lesser Horseshoe Bat

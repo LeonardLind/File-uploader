@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 
 const DEFAULT_IUCN_BASE_URL = "https://api.iucnredlist.org/api/v4";
-const ALLOWED_CLASSES = new Set(["MAMMALIA", "AVES", "REPTILIA", "AMPHIBIA"]);
+const ALLOWED_CLASSES = new Set(["MAMMALIA", "AVES"]);
 const MIN_QUERY_LENGTH = 3;
 const REQUEST_TIMEOUT_MS = 8000;
 
@@ -34,11 +34,11 @@ type IucnScientificResponse = {
 type IucnSuggestion = {
   scientific_name: string;
   common_name?: string;
-  class_name?: string;
-  order_name?: string;
-  family_name?: string;
-  genus_name?: string;
-  species_name?: string;
+  class_name?: string | undefined;
+  order_name?: string | undefined;
+  family_name?: string | undefined;
+  genus_name?: string | undefined;
+  species_name?: string | undefined;
   sis_id?: number | null;
 };
 
@@ -56,6 +56,8 @@ const buildScientificName = (taxon: IucnTaxon) => {
   const parts = [taxon.genus_name, taxon.species_name, taxon.infra_name].filter(Boolean);
   return parts.join(" ");
 };
+
+const isNotNull = <T,>(value: T | null): value is T => value !== null;
 
 const collectTaxa = (taxon?: IucnTaxon) => {
   if (!taxon) return [];
@@ -83,6 +85,9 @@ export async function searchScientificName(req: Request, res: Response) {
   }
 
   const [genusName, speciesName, ...rest] = parts;
+  if (!genusName || !speciesName) {
+    return res.status(200).json({ count: 0, result: [] });
+  }
   const infraName = rest.length ? rest.join(" ") : "";
 
   const token = process.env.IUCN_API_TOKEN?.trim();
@@ -135,13 +140,14 @@ export async function searchScientificName(req: Request, res: Response) {
     }
 
     const taxa = collectTaxa(data.taxon);
-    const suggestions: IucnSuggestion[] = taxa
-      .map((taxon) => {
+    const suggestions = taxa
+      .map((taxon): IucnSuggestion | null => {
         const scientificName = buildScientificName(taxon);
         if (!scientificName) return null;
+        const commonName = pickCommonName(taxon.common_names);
         return {
           scientific_name: scientificName,
-          common_name: pickCommonName(taxon.common_names),
+          ...(commonName ? { common_name: commonName } : {}),
           class_name: taxon.class_name,
           order_name: taxon.order_name,
           family_name: taxon.family_name,
@@ -150,7 +156,7 @@ export async function searchScientificName(req: Request, res: Response) {
           sis_id: taxon.sis_id ?? null,
         };
       })
-      .filter((item): item is IucnSuggestion => Boolean(item));
+      .filter(isNotNull);
 
     const filtered = suggestions.filter((item) => {
       if (!item.class_name) return true;

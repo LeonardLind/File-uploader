@@ -865,7 +865,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
               )}
               <video
                 ref={videoRef}
-                src={videoUrl}
+                src={videoUrl || undefined}
                 crossOrigin="anonymous"
                 controls={false}
                 className="w-full h-[300px] lg:h-[360px] object-contain bg-black"

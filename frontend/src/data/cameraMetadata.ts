@@ -5,63 +5,24 @@ export type CameraAutofill = {
   experiencePoint: string;
 };
 
-// Generated mapping CAM001..CAM057 from project spec
-export const cameraMetadataMap: Record<string, CameraAutofill> = {
-  CAM001: { plot: "Horto Alegria", experiencePoint: "XP1 - Cavidades", sensorId: "Sensor_ID_63", deploymentId: "Deployment_ID_49" },
-  CAM002: { plot: "Horto Alegria", experiencePoint: "XP1 - Cavidades", sensorId: "Sensor_ID_65", deploymentId: "Deployment_ID_51" },
-  CAM003: { plot: "Horto Alegria", experiencePoint: "XP1 - Cavidades", sensorId: "Sensor_ID_66", deploymentId: "Deployment_ID_52" },
-  CAM004: { plot: "Horto Alegria", experiencePoint: "XP1 - Cavidades", sensorId: "Sensor_ID_67", deploymentId: "Deployment_ID_53" },
-  CAM005: { plot: "Horto Alegria", experiencePoint: "XP1 - Cavidades", sensorId: "Sensor_ID_64", deploymentId: "Deployment_ID_50" },
-  CAM006: { plot: "Horto Alegria", experiencePoint: "XP2 - Intacta", sensorId: "Sensor_ID_58", deploymentId: "Deployment_ID_44" },
-  CAM007: { plot: "Horto Alegria", experiencePoint: "XP2 - Intacta", sensorId: "Sensor_ID_59", deploymentId: "Deployment_ID_45" },
-  CAM008: { plot: "Horto Alegria", experiencePoint: "XP2 - Intacta", sensorId: "Sensor_ID_60", deploymentId: "Deployment_ID_46" },
-  CAM009: { plot: "Horto Alegria", experiencePoint: "XP2 - Intacta", sensorId: "Sensor_ID_61", deploymentId: "Deployment_ID_47" },
-  CAM010: { plot: "Horto Alegria", experiencePoint: "XP2 - Intacta", sensorId: "Sensor_ID_62", deploymentId: "Deployment_ID_48" },
-  CAM011: { plot: "Horto Alegria", experiencePoint: "XP3 - Germano", sensorId: "Sensor_ID_72", deploymentId: "Deployment_ID_58" },
-  CAM012: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica rehab", sensorId: "Sensor_ID_0", deploymentId: "Deployment_ID_0" },
-  CAM013: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_4", deploymentId: "Deployment_ID_13" },
-  CAM014: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_12", deploymentId: "Deployment_ID_14" },
-  CAM015: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_18", deploymentId: "Deployment_ID_9" },
-  CAM016: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_23", deploymentId: "Deployment_ID_11" },
-  CAM017: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_27", deploymentId: "Deployment_ID_10" },
-  CAM018: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado reabilitation", sensorId: "Sensor_ID_31", deploymentId: "Deployment_ID_12" },
-  CAM019: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado Mature", sensorId: "Sensor_ID_2", deploymentId: "Deployment_ID_25" },
-  CAM020: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado Mature", sensorId: "Sensor_ID_13", deploymentId: "Deployment_ID_26" },
-  CAM021: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado Mature", sensorId: "Sensor_ID_21", deploymentId: "Deployment_ID_21" },
-  CAM022: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado Mature", sensorId: "Sensor_ID_25", deploymentId: "Deployment_ID_23" },
-  CAM023: { plot: "Mina Aguas Claras", experiencePoint: "Cerrado Mature", sensorId: "Sensor_ID_29", deploymentId: "Deployment_ID_22" },
-  CAM024: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_3", deploymentId: "Deployment_ID_5" },
-  CAM025: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_7", deploymentId: "Deployment_ID_6" },
-  CAM026: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_9", deploymentId: "Deployment_ID_7" },
-  CAM027: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_10", deploymentId: "Deployment_ID_8" },
-  CAM028: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_17", deploymentId: "Deployment_ID_1" },
-  CAM029: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_22", deploymentId: "Deployment_ID_3" },
-  CAM030: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_27", deploymentId: "Deployment_ID_2" },
-  CAM031: { plot: "Mina Aguas Claras", experiencePoint: "Mata-atlantica intact", sensorId: "Sensor_ID_30", deploymentId: "Deployment_ID_4" },
-  CAM032: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_4", deploymentId: "Deployment_ID_19" },
-  CAM033: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_16", deploymentId: "Deployment_ID_20" },
-  CAM034: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_20", deploymentId: "Deployment_ID_15" },
-  CAM035: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_24", deploymentId: "Deployment_ID_17" },
-  CAM036: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_28", deploymentId: "Deployment_ID_16" },
-  CAM037: { plot: "Mina Aguas Claras", experiencePoint: "Mature forest edge", sensorId: "Sensor_ID_32", deploymentId: "Deployment_ID_18" },
-  CAM038: { plot: "Gaio", experiencePoint: "XP1 Fronteira", sensorId: "Sensor_ID_54", deploymentId: "Deployment_ID_40" },
-  CAM039: { plot: "Gaio", experiencePoint: "XP1 Fronteira", sensorId: "Sensor_ID_55", deploymentId: "Deployment_ID_41" },
-  CAM040: { plot: "Gaio", experiencePoint: "XP1 Fronteira", sensorId: "Sensor_ID_56", deploymentId: "Deployment_ID_42" },
-  CAM041: { plot: "Gaio", experiencePoint: "XP1 Fronteira", sensorId: "Sensor_ID_57", deploymentId: "Deployment_ID_43" },
-  CAM042: { plot: "Gaio", experiencePoint: "XP2 Transicao", sensorId: "Sensor_ID_50", deploymentId: "Deployment_ID_36" },
-  CAM043: { plot: "Gaio", experiencePoint: "XP2 Transicao", sensorId: "Sensor_ID_51", deploymentId: "Deployment_ID_37" },
-  CAM044: { plot: "Gaio", experiencePoint: "XP2 Transicao", sensorId: "Sensor_ID_52", deploymentId: "Deployment_ID_38" },
-  CAM045: { plot: "Gaio", experiencePoint: "XP2 Transicao", sensorId: "Sensor_ID_53", deploymentId: "Deployment_ID_39" },
-  CAM046: { plot: "Gaio", experiencePoint: "XP3 Crescimento", sensorId: "Sensor_ID_41", deploymentId: "Deployment_ID_32" },
-  CAM047: { plot: "Gaio", experiencePoint: "XP3 Crescimento", sensorId: "Sensor_ID_42", deploymentId: "Deployment_ID_33" },
-  CAM048: { plot: "Gaio", experiencePoint: "XP3 Crescimento", sensorId: "Sensor_ID_43", deploymentId: "Deployment_ID_34" },
-  CAM049: { plot: "Gaio", experiencePoint: "XP3 Crescimento", sensorId: "Sensor_ID_49", deploymentId: "Deployment_ID_35" },
-  CAM050: { plot: "Gaio", experiencePoint: "XP4 Independente", sensorId: "Sensor_ID_37", deploymentId: "Deployment_ID_28" },
-  CAM051: { plot: "Gaio", experiencePoint: "XP4 Independente", sensorId: "Sensor_ID_38", deploymentId: "Deployment_ID_29" },
-  CAM052: { plot: "Gaio", experiencePoint: "XP4 Independente", sensorId: "Sensor_ID_39", deploymentId: "Deployment_ID_30" },
-  CAM053: { plot: "Gaio", experiencePoint: "XP4 Independente", sensorId: "Sensor_ID_40", deploymentId: "Deployment_ID_31" },
-  CAM054: { plot: "Gaio", experiencePoint: "XP5 Selvageria", sensorId: "Sensor_ID_68", deploymentId: "Deployment_ID_54" },
-  CAM055: { plot: "Gaio", experiencePoint: "XP5 Selvageria", sensorId: "Sensor_ID_69", deploymentId: "Deployment_ID_55" },
-  CAM056: { plot: "Gaio", experiencePoint: "XP5 Selvageria", sensorId: "Sensor_ID_70", deploymentId: "Deployment_ID_56" },
-  CAM057: { plot: "Gaio", experiencePoint: "XP5 Selvageria", sensorId: "Sensor_ID_71", deploymentId: "Deployment_ID_57" },
+type CameraMetadataResponse = {
+  success?: boolean;
+  item?: Partial<CameraAutofill> & { cameraId?: string };
+  error?: string;
 };
+
+export async function fetchCameraMetadata(
+  apiUrl: string,
+  cameraId: string,
+  signal?: AbortSignal
+): Promise<CameraAutofill | null> {
+  if (!apiUrl) return null;
+  const res = await fetch(`${apiUrl}/api/upload/camera-metadata/${cameraId}`, { signal });
+  if (!res.ok) return null;
+  const data = (await res.json()) as CameraMetadataResponse;
+  if (!data?.success || !data.item) return null;
+
+  const { plot, sensorId, deploymentId, experiencePoint } = data.item;
+  if (!plot || !sensorId || !deploymentId || !experiencePoint) return null;
+  return { plot, sensorId, deploymentId, experiencePoint };
+}

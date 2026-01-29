@@ -16,7 +16,6 @@ type UploadedFile = {
 export function UploadPage() {
   const { images, updateImage } = useImageStore();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [uploadingAll, setUploadingAll] = useState(false);
   const navigate = useNavigate();
   const { notify } = useToast();
 
@@ -133,12 +132,13 @@ export function UploadPage() {
     }
   }
 
-  async function handleUploadAll() {
-    if (!unsaved.length) return;
-    setUploadingAll(true);
-    await Promise.all(unsaved.map((img) => uploadSingle(img)));
-    setUploadingAll(false);
-  }
+  useEffect(() => {
+    const pending = unsaved.filter((img) => !img.uploading && !img.saved);
+    if (!pending.length) return;
+    pending.forEach((img) => {
+      void uploadSingle(img);
+    });
+  }, [unsaved]);
 
   return (
     <div
@@ -244,18 +244,6 @@ export function UploadPage() {
                       View in draft
                     </button>
                   )}
-                  <button
-                    onClick={handleUploadAll}
-                    disabled={!unsaved.length || anyUploading || uploadingAll}
-                    className="
-                      bg-lime-400 text-neutral-900 font-semibold rounded-md
-                      px-3 py-2
-                      hover:bg-lime-300 transition text-xs sm:text-sm
-                      disabled:cursor-not-allowed
-                    "
-                  >
-                    {anyUploading || uploadingAll ? "Uploading..." : "Upload"}
-                  </button>
                 </div>
               </div>
             </section>

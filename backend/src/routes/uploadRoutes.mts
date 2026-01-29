@@ -5,6 +5,7 @@ import {
   saveMetadata,
   getAllMetadata,
   getMetadata,
+  getCameraMetadata,
   updateMetadata, 
   deleteFileAndMetadata, 
   saveHighlightAsset,
@@ -23,6 +24,7 @@ router.post("/signed-url", generatePresignedGetUrl);
 router.post("/metadata", saveMetadata);
 router.get("/metadata", getAllMetadata);
 router.get("/metadata/:fileId", getMetadata);
+router.get("/camera-metadata/:cameraId", getCameraMetadata);
 router.get("/confirmed-summary", getConfirmedSpeciesSummary);
 
 // Update metadata

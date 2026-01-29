@@ -6,7 +6,7 @@ import {
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import type { Request, Response } from "express";
-import { ddb, TABLE_NAME, HIGHLIGHT_TABLE_NAME } from "../aws/dynamo.mjs";
+import { ddb, TABLE_NAME, HIGHLIGHT_TABLE_NAME, CAMERA_METADATA_TABLE_NAME } from "../aws/dynamo.mjs";
 import { deleteObject, getPresignedGetUrl, getPresignedPutUrl, objectExists } from "../aws/s3.mjs";
 import dotenv from "dotenv";
 
@@ -420,6 +420,41 @@ export async function getMetadata(req: Request, res: Response): Promise<void> {
     res.status(500).json({
       success: false,
       error: err instanceof Error ? err.message : "Failed to get metadata",
+    });
+  }
+}
+
+export async function getCameraMetadata(req: Request, res: Response): Promise<void> {
+  try {
+    const { cameraId } = req.params;
+    if (!cameraId) {
+      res.status(400).json({ success: false, error: "Missing cameraId" });
+      return;
+    }
+
+    if (!CAMERA_METADATA_TABLE_NAME) {
+      res.status(500).json({ success: false, error: "Camera metadata table is not configured" });
+      return;
+    }
+
+    const data = await ddb.send(
+      new GetCommand({
+        TableName: CAMERA_METADATA_TABLE_NAME,
+        Key: { cameraId },
+      })
+    );
+
+    if (!data.Item) {
+      res.status(404).json({ success: false, error: "Not found" });
+      return;
+    }
+
+    res.json({ success: true, item: data.Item });
+  } catch (err: unknown) {
+    console.error("Error getting camera metadata:", err);
+    res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to get camera metadata",
     });
   }
 }
