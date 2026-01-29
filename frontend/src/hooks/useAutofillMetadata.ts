@@ -1,7 +1,34 @@
 import { useEffect, useRef } from "react";
-import { fetchCameraMetadata, type CameraAutofill } from "../data/cameraMetadata";
 import { extractCameraName, normalizeStage } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
+
+type CameraAutofill = {
+  plot: string;
+  sensorId: string;
+  deploymentId: string;
+  experiencePoint: string;
+};
+
+type CameraMetadataResponse = {
+  success?: boolean;
+  item?: Partial<CameraAutofill> & { cameraId?: string };
+  error?: string;
+};
+
+async function fetchCameraMetadata(
+  apiUrl: string,
+  cameraId: string
+): Promise<CameraAutofill | null> {
+  if (!apiUrl) return null;
+  const res = await fetch(`${apiUrl}/api/upload/camera-metadata/${cameraId}`);
+  if (!res.ok) return null;
+  const data = (await res.json()) as CameraMetadataResponse;
+  if (!data?.success || !data.item) return null;
+
+  const { plot, sensorId, deploymentId, experiencePoint } = data.item;
+  if (!plot || !sensorId || !deploymentId || !experiencePoint) return null;
+  return { plot, sensorId, deploymentId, experiencePoint };
+}
 
 export function useAutofillMetadata(
   files: MetadataItem[],
@@ -25,7 +52,7 @@ export function useAutofillMetadata(
 
       const request = fetchCameraMetadata(apiUrl, cameraId)
         .catch(() => null)
-        .then((result) => {
+        .then((result: CameraAutofill | null) => {
           cameraCache.current.set(cameraId, result);
           return result;
         })

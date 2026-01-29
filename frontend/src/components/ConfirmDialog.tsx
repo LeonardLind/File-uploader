@@ -25,7 +25,7 @@ export function ConfirmDialog({
       : "bg-lime-400 hover:bg-lime-300 text-black";
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-70 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-neutral-950 border border-slate-800 rounded-xl shadow-2xl p-5 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>

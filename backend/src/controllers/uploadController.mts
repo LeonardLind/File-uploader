@@ -137,6 +137,7 @@ const fetchIucnSummary = async (scientificName: string): Promise<IucnSummary | n
 
   try {
     const scientificUrl = new URL(`${baseUrl}/taxa/scientific_name`);
+    if (!parsed.genusName || !parsed.speciesName) return null;
     scientificUrl.searchParams.set("genus_name", parsed.genusName);
     scientificUrl.searchParams.set("species_name", parsed.speciesName);
     if (parsed.infraName) scientificUrl.searchParams.set("infra_name", parsed.infraName);
@@ -217,7 +218,9 @@ const mapWithConcurrency = async <T, R>(
     while (true) {
       const currentIndex = nextIndex++;
       if (currentIndex >= items.length) return;
-      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+      const item = items[currentIndex];
+      if (item === undefined) return;
+      results[currentIndex] = await mapper(item, currentIndex);
     }
   });
   await Promise.all(workers);
@@ -302,12 +305,13 @@ export async function generatePresignedGetUrl(req: Request, res: Response): Prom
 
     const expires = typeof expiresIn === "number" && expiresIn > 0 ? expiresIn : 300;
 
-    const signedUrl = await getPresignedGetUrl({
+    const presignParams = {
       Bucket: bucket,
       Key: key,
       Expires: expires,
-      ResponseContentType: responseContentType,
-    });
+      ...(responseContentType ? { ResponseContentType: responseContentType } : {}),
+    };
+    const signedUrl = await getPresignedGetUrl(presignParams);
 
     res.json({ success: true, url: signedUrl, key });
   } catch (err: unknown) {

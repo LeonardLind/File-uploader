@@ -94,10 +94,10 @@ export function TopNav() {
           </div>
 
           <nav className="relative flex items-center gap-3 sm:gap-5">
-            <div className="absolute left-0 right-0 bottom-0 h-[2px] bg-slate-700 z-0" />
+            <div className="absolute left-0 right-0 bottom-0 h-0.5 bg-slate-700 z-0" />
             {activeIndex >= 0 && (
               <div
-                className="absolute bottom-0 h-[2px] bg-lime-500 rounded-full transition-all duration-300 ease-out z-10"
+                className="absolute bottom-0 h-0.5 bg-lime-500 rounded-full transition-all duration-300 ease-out z-10"
                 style={{ width: indicatorWidths[activeIndex], left: indicatorOffsets[activeIndex] }}
               />
             )}
@@ -182,7 +182,7 @@ export function TopNav() {
       </header>
 
       {summaryOpen && (
-        <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-80 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
           <div className="w-full max-w-5xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>

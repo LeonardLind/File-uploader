@@ -688,7 +688,7 @@ export function GalleryPage() {
                               </td>
                             )}
 
-                            <td className="px-3 py-2 text-slate-400 truncate max-w-[10rem]">
+                            <td className="px-3 py-2 text-slate-400 truncate max-w-40">
                               {file.filename || "(no filename)"}
                             </td>
 

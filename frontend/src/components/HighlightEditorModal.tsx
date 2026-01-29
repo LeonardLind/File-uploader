@@ -798,10 +798,10 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       <div className="relative w-full max-w-5xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-3.5 md:p-4 lg:p-5 2xl:p-6 space-y-4 sm:space-y-5 max-h-[92vh] overflow-y-auto custom-scroll">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <h2 className="text-sm sm:text-base lg:text-base 2xl:text-lg font-semibold text-white break-words mb-0.5">
+            <h2 className="text-sm sm:text-base lg:text-base 2xl:text-lg font-semibold text-white wrap-break-wordword mb-0.5">
               Highlight editor
             </h2>
-            <p className="text-slate-300 text-[10px] sm:text-xs 2xl:text-sm break-words">
+            <p className="text-slate-300 text-[10px] sm:text-xs 2xl:text-sm wrap-break-word">
               {file.filename}
             </p>
           </div>
@@ -909,7 +909,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
 
               <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-slate-800 bg-neutral-900 p-3 md:p-2">
               {hasExistingHighlightAssets && (
-                <div className="inline-flex items-center justify-center gap-2 px-1 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-100 text-[11px] sm:text-xs self-center max-w-[15.5rem]">
+                <div className="inline-flex items-center justify-center gap-2 px-1 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-100 text-[11px] sm:text-xs self-center max-w-62">
                   <span className="font-semibold">Existing highlight detected</span>
                   <button
                     onClick={() => setShowReplacePrompt(true)}
@@ -927,23 +927,23 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
                     <img
                       src={framePreview}
                       alt="Thumbnail preview"
-                      className="h-24 w-[11.5rem] max-w-full object-cover rounded border border-slate-700"
+                      className="h-24 w-46full object-cover rounded border border-slate-700"
                     />
                   ) : (
-                    <div className="w-[11.5rem] h-24 rounded border border-dashed border-slate-700 bg-neutral-900" />
+                    <div className="w-46 h-24 rounded border border-dashed border-slate-700 bg-neutral-900" />
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 text-[10px] sm:text-[11px] 2xl:text-xs text-slate-200 min-w-[11.5rem]">
-                  <span className="inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold min-w-[5.5rem]">
+                <div className="grid grid-cols-2 gap-1.5 text-[10px] sm:text-[11px] 2xl:text-xs text-slate-200 min-w-46">
+                  <span className="inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold min-w-22">
                     Start {trimStart.toFixed(1)}s
                   </span>
-                  <span className="inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold min-w-[5.5rem]">
+                  <span className="inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold min-w-22">
                     End {trimEnd.toFixed(1)}s
                   </span>
-                  <span className="inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold min-w-[5.5rem]">
+                  <span className="inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold min-w-22">
                     Thumb {frameTime.toFixed(1)}s
                   </span>
-                  <span className="inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold min-w-[5.5rem]">
+                  <span className="inline-flex items-center justify-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-100 font-semibold min-w-22">
                     Clip {(trimEnd - trimStart).toFixed(1)}s
                   </span>
                 </div>
@@ -952,7 +952,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
               <div className="flex items-center justify-center gap-2.5 flex-nowrap">
                 <button
                   onClick={togglePlay}
-                  className="px-3.5 py-1.75 text-[12px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center justify-center gap-2 min-w-[7.5rem]"
+                  className="px-3.5 py-1.75 text-[12px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center justify-center gap-2 min-w-30"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                     {isPlaying ? (
@@ -969,7 +969,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
                 </button>
                 <button
                   onClick={toggleFullscreen}
-                  className="px-3.5 py-1.75 text-[12px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center justify-center gap-2 min-w-[7.5rem]"
+                  className="px-3.5 py-1.75 text-[12px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center justify-center gap-2 min-w-30"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M3 3h5v2H5v3H3V3zm9 0h5v5h-2V5h-3V3zm3 9h2v5h-5v-2h3v-3zm-7 3v2H3v-5h2v3h3z" />
@@ -1004,7 +1004,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         </div>
 
         {showReplacePrompt && (
-          <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
             <div className="bg-neutral-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-4 sm:p-5 2xl:p-6 space-y-4 max-h-[90vh] overflow-y-auto custom-scroll">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm sm:text-base 2xl:text-lg font-semibold text-white">Replace existing highlight?</h3>
@@ -1067,7 +1067,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         )}
 
         {saving && (
-          <div className="absolute inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="absolute inset-0 z-65 bg-black/70 backdrop-blur-sm flex items-center justify-center">
             <HexLoader size={90} label="Saving highlight" />
           </div>
         )}

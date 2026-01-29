@@ -44,7 +44,6 @@ export function UploadPage() {
   const done = uploadedFiles.filter((f) => f.done).length;
   const hasUploads = total > 0;
   const hasReady = done > 0;
-  const anyUploading = useMemo(() => uploadedFiles.some((f) => f.uploading), [uploadedFiles]);
   const filesToRender = useMemo(() => {
     const orderMap = new Map(uploadedFiles.map((f, idx) => [f.id, idx]));
     return [...uploadedFiles].sort((a, b) => {
@@ -178,7 +177,7 @@ export function UploadPage() {
               <ul
                 className="
                   space-y-1
-                  max-h-[150px] sm:max-h-[160px] md:max-h-[170px] lg:max-h-[180px]
+                  max-h-[150px] sm:max-h-40 md:max-h-[170px] lg:max-h-[180px]
                   overflow-y-auto pr-2 custom-scroll
                 "
               >
