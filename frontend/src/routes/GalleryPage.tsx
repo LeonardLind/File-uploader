@@ -8,7 +8,6 @@ import { Pagination } from "../components/Pagination";
 import { HexLoader } from "../components/HexLoader";
 import { useMetadata } from "../hooks/useMetadata";
 import { useFilteredMetadata } from "../hooks/useFilteredMetadata";
-import { useAutofillMetadata } from "../hooks/useAutofillMetadata";
 import { useConfirmDialog } from "../hooks/useConfirmDialog";
 import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
 import { deriveStatus, type Status } from "../utils/galleryUtils";
@@ -97,7 +96,6 @@ export function GalleryPage() {
     setFiles((prev) => prev.map((f) => (f.fileId === fileId ? { ...f, ...updates } : f)));
   };
 
-  useAutofillMetadata(files, updateLocal, API_URL);
 
   const handleDeleteFile = async (fileId: string) => {
     const confirmed = await requestConfirm({

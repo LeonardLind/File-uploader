@@ -29,6 +29,10 @@ export function deriveStatus(item: MetadataItem): Status {
 export function extractCameraName(key?: string): string | null {
   if (!key) return null;
   const base = key.split("/").pop() ?? key;
-  const match = base.match(/(CAM\d{3})/i);
-  return match ? match[1].toUpperCase() : null;
+  const underscoreIndex = base.lastIndexOf("_");
+  if (underscoreIndex === -1) return null;
+  const tail = base.slice(underscoreIndex + 1);
+  const withoutExt = tail.replace(/\.[^.]+$/, "");
+  const trimmed = withoutExt.trim();
+  return trimmed ? trimmed : null;
 }

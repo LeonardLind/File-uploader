@@ -102,6 +102,17 @@ const parseScientificName = (scientificName: string) => {
   return { genusName, speciesName, infraName };
 };
 
+const extractCameraIdFromFilename = (value?: string | null) => {
+  if (!value) return null;
+  const base = value.split("/").pop() ?? value;
+  const underscoreIndex = base.lastIndexOf("_");
+  if (underscoreIndex === -1) return null;
+  const tail = base.slice(underscoreIndex + 1);
+  const withoutExt = tail.replace(/\.[^.]+$/, "");
+  const trimmed = withoutExt.trim();
+  return trimmed ? trimmed : null;
+};
+
 const fetchIucnJson = async (url: string, token: string) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), IUCN_REQUEST_TIMEOUT_MS);
@@ -378,6 +389,29 @@ export async function saveMetadata(req: Request, res: Response): Promise<void> {
     for (const [key, value] of Object.entries(base)) {
       if (value !== undefined && value !== null && value !== "") {
         item[key] = value;
+      }
+    }
+
+    const needsAutofill =
+      !item.plot || !item.sensorId || !item.deploymentId || !item.experiencePoint;
+    const cameraId = extractCameraIdFromFilename(filename || fileId);
+    if (needsAutofill && cameraId && CAMERA_METADATA_TABLE_NAME) {
+      try {
+        const cameraData = await ddb.send(
+          new GetCommand({
+            TableName: CAMERA_METADATA_TABLE_NAME,
+            Key: { cameraId },
+          })
+        );
+        if (cameraData.Item) {
+          const { plot, sensorId, deploymentId, experiencePoint } = cameraData.Item as Record<string, unknown>;
+          if (!item.plot && plot) item.plot = plot;
+          if (!item.sensorId && sensorId) item.sensorId = sensorId;
+          if (!item.deploymentId && deploymentId) item.deploymentId = deploymentId;
+          if (!item.experiencePoint && experiencePoint) item.experiencePoint = experiencePoint;
+        }
+      } catch (err) {
+        console.warn("Autofill lookup failed", { cameraId, error: err });
       }
     }
 
