@@ -17,6 +17,8 @@ type EditPaneProps = {
   onClose: () => void;
   onSave: (payload: {
     species?: string;
+    species_source?: "iucn" | "domesticated";
+    domesticated_common_name?: string | null;
     plot?: string;
     experiencePoint?: string;
     sensorId?: string;
@@ -49,8 +51,32 @@ type InatSuggestion = {
   id?: number;
 };
 
+type DomesticatedOption = {
+  common_name: string;
+  scientific_name: string;
+};
+
 const MIN_SPECIES_QUERY = 3;
 const SPECIES_DEBOUNCE_MS = 250;
+const DOMESTICATED_TRIGGER = "domesticated";
+const DOMESTICATED_SPECIES: DomesticatedOption[] = [
+  { common_name: "Cat", scientific_name: "Felis catus" },
+  { common_name: "Dog", scientific_name: "Canis lupus familiaris" },
+  { common_name: "Cattle", scientific_name: "Bos taurus" },
+  { common_name: "Pig", scientific_name: "Sus scrofa domesticus" },
+  { common_name: "Sheep", scientific_name: "Ovis aries" },
+  { common_name: "Goat", scientific_name: "Capra hircus" },
+  { common_name: "Horse", scientific_name: "Equus ferus caballus" },
+  { common_name: "Donkey", scientific_name: "Equus africanus asinus" },
+  { common_name: "Chicken", scientific_name: "Gallus gallus domesticus" },
+  { common_name: "Duck", scientific_name: "Anas platyrhynchos domesticus" },
+  { common_name: "Goose", scientific_name: "Anser anser domesticus" },
+  { common_name: "Turkey", scientific_name: "Meleagris gallopavo domesticus" },
+  { common_name: "Rabbit", scientific_name: "Oryctolagus cuniculus domesticus" },
+  { common_name: "Ferret", scientific_name: "Mustela putorius furo" },
+  { common_name: "Llama", scientific_name: "Lama glama" },
+  { common_name: "Alpaca", scientific_name: "Vicugna pacos" },
+];
 type RequiredFieldKey = "species" | "plot" | "experiencePoint" | "sensorId" | "deploymentId";
 type FieldKey = RequiredFieldKey | "idState";
 const REQUIRED_FIELD_KEYS: RequiredFieldKey[] = [
@@ -89,7 +115,14 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
   const [iucnError, setIucnError] = useState<string | null>(null);
   const [iucnHint, setIucnHint] = useState<string | null>(null);
   const [speciesSelectedFromIucn, setSpeciesSelectedFromIucn] = useState(false);
-  const [searchMode, setSearchMode] = useState<"inat" | "iucn">("inat");
+  const [speciesSelectedFromDomesticated, setSpeciesSelectedFromDomesticated] = useState(false);
+  const [speciesSource, setSpeciesSource] = useState<"iucn" | "domesticated" | undefined>(
+    file.species_source
+  );
+  const [domesticatedCommonName, setDomesticatedCommonName] = useState<string | undefined>(
+    file.domesticated_common_name
+  );
+  const [searchMode, setSearchMode] = useState<"inat" | "iucn" | "domesticated">("inat");
   const [iucnQuery, setIucnQuery] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
 
@@ -116,7 +149,10 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
     setInatError(null);
     setIucnError(null);
     setIucnHint(null);
-    setSpeciesSelectedFromIucn(false);
+    setSpeciesSelectedFromIucn(file.species_source === "iucn");
+    setSpeciesSelectedFromDomesticated(file.species_source === "domesticated");
+    setSpeciesSource(file.species_source);
+    setDomesticatedCommonName(file.domesticated_common_name);
     setSearchMode("inat");
     setIucnQuery("");
     setFieldErrors({});
@@ -153,6 +189,28 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
   }, [apiUrl, file.fileId]);
 
   const speciesQuery = species.trim();
+  const showDomesticatedOption = useMemo(() => {
+    if (speciesQuery.length < MIN_SPECIES_QUERY) return false;
+    const lower = speciesQuery.toLowerCase();
+    return DOMESTICATED_TRIGGER.startsWith(lower);
+  }, [speciesQuery]);
+  const domesticatedFilter = useMemo(() => {
+    if (searchMode !== "domesticated") return "";
+    const lower = speciesQuery.toLowerCase();
+    if (lower.startsWith(DOMESTICATED_TRIGGER)) {
+      return lower.replace(DOMESTICATED_TRIGGER, "").trim();
+    }
+    return lower;
+  }, [searchMode, speciesQuery]);
+  const filteredDomesticated = useMemo(() => {
+    if (searchMode !== "domesticated") return [];
+    if (!domesticatedFilter) return DOMESTICATED_SPECIES;
+    return DOMESTICATED_SPECIES.filter((item) => {
+      const common = item.common_name.toLowerCase();
+      const scientific = item.scientific_name.toLowerCase();
+      return common.startsWith(domesticatedFilter) || scientific.startsWith(domesticatedFilter);
+    });
+  }, [domesticatedFilter, searchMode]);
   const filteredSuggestions = useMemo(() => {
     if (speciesQuery.length < MIN_SPECIES_QUERY) return [];
     const lower = speciesQuery.toLowerCase();
@@ -272,6 +330,9 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
   const handleSpeciesSelect = (item: IucnSuggestion) => {
     setSpecies(item.scientific_name);
     setSpeciesSelectedFromIucn(true);
+    setSpeciesSelectedFromDomesticated(false);
+    setSpeciesSource("iucn");
+    setDomesticatedCommonName(undefined);
     setSpeciesOpen(false);
     setFieldErrors((prev) => {
       const next = { ...prev };
@@ -283,12 +344,48 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
   const handleInatSelect = (item: InatSuggestion) => {
     setSpecies(item.scientific_name);
     setSpeciesSelectedFromIucn(false);
+    setSpeciesSelectedFromDomesticated(false);
+    setSpeciesSource(undefined);
+    setDomesticatedCommonName(undefined);
     setSearchMode("iucn");
     setIucnQuery(item.scientific_name);
     setIucnSuggestions([]);
     setIucnError(null);
     setIucnHint(null);
     setSpeciesOpen(true);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.species;
+      return next;
+    });
+  };
+
+  const handleDomesticatedTrigger = () => {
+    setSpecies("Domesticated");
+    setSpeciesSelectedFromIucn(false);
+    setSpeciesSelectedFromDomesticated(false);
+    setSpeciesSource(undefined);
+    setDomesticatedCommonName(undefined);
+    setSearchMode("domesticated");
+    setIucnQuery("");
+    setIucnSuggestions([]);
+    setIucnError(null);
+    setIucnHint(null);
+    setSpeciesOpen(true);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.species;
+      return next;
+    });
+  };
+
+  const handleDomesticatedSelect = (item: DomesticatedOption) => {
+    setSpecies(item.scientific_name);
+    setSpeciesSelectedFromIucn(false);
+    setSpeciesSelectedFromDomesticated(true);
+    setSpeciesSource("domesticated");
+    setDomesticatedCommonName(item.common_name);
+    setSpeciesOpen(false);
     setFieldErrors((prev) => {
       const next = { ...prev };
       delete next.species;
@@ -322,6 +419,11 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
     setFieldErrors({});
     const payloadIdState = idState || "Unknown";
     const currentStatus = deriveStatus(file);
+    const speciesVerified =
+      speciesSelectedFromIucn ||
+      speciesSelectedFromDomesticated ||
+      currentStatus === "done" ||
+      currentStatus === "display";
     const requiredFields: [FieldKey, string][] = [];
     REQUIRED_FIELD_KEYS.forEach((key) => {
       const value = { species, plot, experiencePoint, sensorId, deploymentId }[key];
@@ -331,8 +433,8 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
     });
     if (status === "done") {
       const stageErrors: [FieldKey, string][] = [...requiredFields];
-      if (!speciesSelectedFromIucn && currentStatus !== "done" && currentStatus !== "display") {
-        stageErrors.push(["species", "Select a Latin name from the IUCN lookup"]);
+      if (!speciesVerified) {
+        stageErrors.push(["species", "Select a Latin name from IUCN or mark as domesticated"]);
       }
       if (payloadIdState !== "Confirmed") {
         stageErrors.push(["idState", "Set ID State to Confirmed"]);
@@ -341,17 +443,19 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
         markErrors(stageErrors);
         onAlert(
           "Incomplete for Done",
-          "Fill all fields, set ID State to Confirmed, and pick the Latin name from IUCN."
+          "Fill all fields, set ID State to Confirmed, and pick an IUCN Latin name or mark as domesticated."
         );
         return;
       }
     }
-    if (status === "done" && !speciesSelectedFromIucn && currentStatus !== "done" && currentStatus !== "display") {
-      onAlert("Latin name required", "Select a Latin name from the IUCN lookup before moving to Done.");
+    if (status === "done" && !speciesVerified) {
+      onAlert("Species required", "Select a Latin name from IUCN or mark the species as domesticated.");
       return;
     }
     onSave({
       species,
+      species_source: speciesSource,
+      domesticated_common_name: speciesSource === "domesticated" ? domesticatedCommonName ?? null : null,
       plot,
       experiencePoint,
       sensorId,
@@ -440,14 +544,25 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
                   Verified by IUCN
                 </span>
               )}
+              {speciesSelectedFromDomesticated && (
+                <span className="text-[10px] uppercase tracking-wide text-amber-200 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                  Domesticated
+                </span>
+              )}
             </div>
             <div className="relative">
               <input
                 value={species}
                 onChange={(e) => {
-                  setSpecies(e.target.value);
+                  const nextValue = e.target.value;
+                  const nextLower = nextValue.trim().toLowerCase();
+                  const isDomesticated = nextLower.startsWith(DOMESTICATED_TRIGGER);
+                  setSpecies(nextValue);
                   setSpeciesSelectedFromIucn(false);
-                  setSearchMode("inat");
+                  setSpeciesSelectedFromDomesticated(false);
+                  setSpeciesSource(undefined);
+                  setDomesticatedCommonName(undefined);
+                  setSearchMode(isDomesticated ? "domesticated" : "inat");
                   setIucnQuery("");
                   setIucnSuggestions([]);
                   setIucnError(null);
@@ -479,6 +594,24 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
                   {searchMode === "inat" && !inatLoading && !inatError && filteredSuggestions.length === 0 && (
                     <div className="px-2 py-2 text-[11px] text-slate-400">No matches.</div>
                   )}
+                  {searchMode === "inat" && !inatLoading && !inatError && showDomesticatedOption && (
+                    <button
+                      type="button"
+                      className="w-full text-left px-2 py-1.5 text-[11px] text-amber-200 hover:bg-neutral-800/80 transition"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleDomesticatedTrigger();
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-amber-100">Domesticated</span>
+                        <span className="text-[10px] text-amber-300/80">curated list</span>
+                      </div>
+                      <div className="text-[10px] text-amber-300/80">
+                        Select to choose dog, livestock, poultry.
+                      </div>
+                    </button>
+                  )}
                   {searchMode === "inat" &&
                     !inatLoading &&
                     !inatError &&
@@ -501,6 +634,27 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
                         {item.common_name && (
                           <div className="text-[10px] text-slate-400">{item.scientific_name}</div>
                         )}
+                      </button>
+                    ))}
+                  {searchMode === "domesticated" && filteredDomesticated.length === 0 && (
+                    <div className="px-2 py-2 text-[11px] text-slate-400">No domesticated matches.</div>
+                  )}
+                  {searchMode === "domesticated" &&
+                    filteredDomesticated.map((item) => (
+                      <button
+                        key={item.scientific_name}
+                        type="button"
+                        className="w-full text-left px-2 py-1.5 text-[11px] text-slate-200 hover:bg-neutral-800/80 transition"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleDomesticatedSelect(item);
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-slate-100">{item.common_name}</span>
+                          <span className="text-[10px] text-slate-400">Domesticated</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400">{item.scientific_name}</div>
                       </button>
                     ))}
                   {searchMode === "iucn" && iucnLoading && (
@@ -552,11 +706,14 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
                 const currentStatus = deriveStatus(file);
                 if (
                   nextStatus === "done" &&
-                  !speciesSelectedFromIucn &&
+                  !(speciesSelectedFromIucn || speciesSelectedFromDomesticated) &&
                   currentStatus !== "done" &&
                   currentStatus !== "display"
                 ) {
-                  onAlert("Latin name required", "Select a Latin name from the IUCN lookup before moving to Done.");
+                  onAlert(
+                    "Species required",
+                    "Select a Latin name from IUCN or mark the species as domesticated before moving to Done."
+                  );
                   return;
                 }
                 if (nextStatus === "done" && (!allFieldsFilled || idState !== "Confirmed")) {

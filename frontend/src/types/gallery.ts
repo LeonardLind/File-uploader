@@ -4,6 +4,8 @@ export type MetadataItem = {
   highlightThumbnailId?: string;
   filename: string;
   species?: string;
+  species_source?: "iucn" | "domesticated";
+  domesticated_common_name?: string;
   plot?: string;
   experiencePoint?: string;
   sensorId?: string;

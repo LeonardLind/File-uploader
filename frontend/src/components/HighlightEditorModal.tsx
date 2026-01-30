@@ -583,6 +583,8 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
           trimEndSec: nextTrimEnd,
           filename: file.filename,
           species: file.species,
+          species_source: file.species_source,
+          domesticated_common_name: file.domesticated_common_name,
           plot: file.plot,
           experiencePoint: file.experiencePoint,
           sensorId: file.sensorId,

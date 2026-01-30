@@ -167,6 +167,8 @@ export function GalleryPage() {
 
   const handleSaveEdit = async (payload: {
     species?: string;
+    species_source?: "iucn" | "domesticated";
+    domesticated_common_name?: string | null;
     plot?: string;
     experiencePoint?: string;
     sensorId?: string;
@@ -225,6 +227,8 @@ export function GalleryPage() {
         body: JSON.stringify({
           fileId: editing.fileId,
           species: payload.species,
+          species_source: payload.species_source,
+          domesticated_common_name: payload.domesticated_common_name,
           plot: payload.plot,
           experiencePoint: payload.experiencePoint,
           sensorId: payload.sensorId,
