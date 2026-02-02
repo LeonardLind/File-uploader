@@ -16,6 +16,7 @@ export function useKeyboardNavigation(
     }
   };
 
+  // Arrow key navigation between items.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!editing) return;

@@ -58,15 +58,15 @@ type DomesticatedOption = {
 
 const MIN_SPECIES_QUERY = 3;
 const SPECIES_DEBOUNCE_MS = 250;
-const DOMESTICATED_TRIGGER = "domesticated";
+const DOMESTICATED_TRIGGER = "domesticated"; // typing this activates domestic list
 const DOMESTICATED_SPECIES: DomesticatedOption[] = [
   { common_name: "Cat", scientific_name: "Felis catus" },
-  { common_name: "Dog", scientific_name: "Canis lupus familiaris" },
+  { common_name: "Dog", scientific_name: "Canis familiaris" },
   { common_name: "Cattle", scientific_name: "Bos taurus" },
   { common_name: "Pig", scientific_name: "Sus scrofa domesticus" },
   { common_name: "Sheep", scientific_name: "Ovis aries" },
   { common_name: "Goat", scientific_name: "Capra hircus" },
-  { common_name: "Horse", scientific_name: "Equus ferus caballus" },
+  { common_name: "Horse", scientific_name: "Equus caballus" },
   { common_name: "Donkey", scientific_name: "Equus africanus asinus" },
   { common_name: "Chicken", scientific_name: "Gallus gallus domesticus" },
   { common_name: "Duck", scientific_name: "Anas platyrhynchos domesticus" },
@@ -91,8 +91,7 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
   const defaultStage = useMemo<Status>(() => {
     if (currentView === "draft") return "id";
     if (currentView === "id") return "done";
-    if (currentView === "done") return "done";
-    return deriveStatus(file) === "display" ? "done" : deriveStatus(file);
+    return deriveStatus(file);
   }, [currentView, file]);
 
   const [species, setSpecies] = useState(file.species ?? "");
@@ -119,14 +118,14 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
   const [speciesSource, setSpeciesSource] = useState<"iucn" | "domesticated" | undefined>(
     file.species_source
   );
-  const [domesticatedCommonName, setDomesticatedCommonName] = useState<string | undefined>(
+  const [domesticatedCommonName, setDomesticatedCommonName] = useState<string | null | undefined>(
     file.domesticated_common_name
   );
   const [searchMode, setSearchMode] = useState<"inat" | "iucn" | "domesticated">("inat");
   const [iucnQuery, setIucnQuery] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
 
-  const locked = deriveStatus(file) === "display";
+  const locked = deriveStatus(file) === "display"; //Just safety check if ui change in future
   const allFieldsFilled = [species, plot, experiencePoint, sensorId, deploymentId].every(
     (val) => !!val && val.trim() !== ""
   );
@@ -153,11 +152,12 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
     setSpeciesSelectedFromDomesticated(file.species_source === "domesticated");
     setSpeciesSource(file.species_source);
     setDomesticatedCommonName(file.domesticated_common_name);
-    setSearchMode("inat");
+    setSearchMode("inat"); //inat = iNaturalist
     setIucnQuery("");
     setFieldErrors({});
   }, [file, defaultStage]);
 
+  // Load a signed video URL for the preview player.
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
@@ -223,6 +223,7 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
     });
   }, [speciesQuery, inatSuggestions]);
 
+   // When typing species, we call iNaturalist autocomplete
   useEffect(() => {
     if (locked) return;
     if (searchMode !== "inat") return;
@@ -246,6 +247,7 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
         if (!res.ok) {
           throw new Error(data?.error || "Failed to load species");
         }
+        // Store results in state so dropdown can show them
         const results = Array.isArray(data?.result) ? data.result : [];
         setInatSuggestions(results);
       } catch (err) {
@@ -263,6 +265,7 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
     };
   }, [apiUrl, locked, searchMode, speciesQuery]);
 
+   // After choosing from iNaturalist, we try to verify in IUCN
   useEffect(() => {
     if (locked) return;
     if (searchMode !== "iucn") return;
@@ -275,7 +278,7 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
       setIucnLoading(false);
       return;
     }
-
+     // IUCN needs 2 words: "Genus species"
     const parts = query.split(/\s+/).filter(Boolean);
     if (parts.length < 2) {
       setIucnSuggestions([]);
@@ -292,6 +295,7 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
 
     (async () => {
       try {
+        // Ask backend to search IUCN
         const res = await fetch(
           `${apiUrl}/api/iucn/scientific-name?q=${encodeURIComponent(query)}`,
           { signal: controller.signal }
@@ -416,14 +420,14 @@ export function EditPane({ file, apiUrl, uniqueValues, onClose, onSave, onDelete
     fieldErrors[key] ? "border-red-500 ring-1 ring-red-500/60" : "";
 
   const save = () => {
+    // Validate required fields before saving.
     setFieldErrors({});
     const payloadIdState = idState || "Unknown";
     const currentStatus = deriveStatus(file);
     const speciesVerified =
       speciesSelectedFromIucn ||
       speciesSelectedFromDomesticated ||
-      currentStatus === "done" ||
-      currentStatus === "display";
+      currentStatus === "done";
     const requiredFields: [FieldKey, string][] = [];
     REQUIRED_FIELD_KEYS.forEach((key) => {
       const value = { species, plot, experiencePoint, sensorId, deploymentId }[key];

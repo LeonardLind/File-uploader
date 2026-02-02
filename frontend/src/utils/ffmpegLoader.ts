@@ -1,3 +1,4 @@
+// Dynamically load ffmpeg and ensure it is ready to use.
 export async function loadFFmpeg() {
   try {
     const mod: any = await import("@ffmpeg/ffmpeg");

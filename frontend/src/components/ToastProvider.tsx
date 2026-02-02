@@ -76,7 +76,7 @@ function Icon({ tone }: { tone: ToastTone }) {
       </svg>
     );
   }
-  // warning + error share the cross motif
+
   if (tone === "warning") {
     return (
       <svg
@@ -114,6 +114,7 @@ function Icon({ tone }: { tone: ToastTone }) {
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // Track auto-close timers for each toast.
   const timers = useRef<Record<string, number>>({});
 
   const removeToast = (id: string) => {
@@ -137,6 +138,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => removeToast(id), 240);
   };
 
+  // Add a toast and schedule auto-dismiss.
   const notify = ({ title, message, tone = "info", durationMs = 10800 }: { title?: string; message: string; tone?: ToastTone; durationMs?: number }) => {
     const id = crypto.randomUUID();
     setToasts((prev) => [...prev.slice(-3), { id, title, message, tone }]);

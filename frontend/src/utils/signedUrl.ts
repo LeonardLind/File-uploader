@@ -7,6 +7,7 @@ type SignedUrlRequest = {
   signal?: AbortSignal;
 };
 
+// This function asks the server for a signed upload link
 export async function fetchSignedUrl({
   apiUrl,
   key,
@@ -15,6 +16,8 @@ export async function fetchSignedUrl({
   responseContentType,
   signal,
 }: SignedUrlRequest): Promise<string> {
+
+   // Send a request to our backend to ask for the signed URL
   const res = await fetch(`${apiUrl}/api/upload/signed-url`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

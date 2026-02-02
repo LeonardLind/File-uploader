@@ -1,28 +1,29 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { useImageStore } from "../state/useImageStore";
+import { usePendingUploads } from "../state/usePendingUploads";
 import { getFFmpeg } from "../utils/ffmpegSingleton";
 
 type FileDropzoneProps = {
   compact?: boolean;
 };
 
+// Check if file is AVI (by mime type or file name)
 const isAvi = (file: File) =>
   file.type === "video/x-msvideo" || /\.avi$/i.test(file.name);
 
 type ProcessingFile = {
   id: string;
   name: string;
-  progress: number;
+  progress: number; // 0–100
   status: "pending" | "converting" | "done" | "error";
 };
 
 export function FileDropzone({ compact = false }: FileDropzoneProps) {
-  const { addFiles } = useImageStore();
+  const { addFiles } = usePendingUploads();
   const [processing, setProcessing] = useState<ProcessingFile[]>([]);
   const [isWorking, setIsWorking] = useState(false);
 
-  // 🎬 Convert AVI to MP4 asynchronously (parallel-safe)
+  // Convert AVI to MP4 asynchronously (parallel-safe)
   const convertAviToMp4 = useCallback(
     async (file: File) => {
       const id = crypto.randomUUID();
@@ -35,13 +36,15 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
       ]);
 
       try {
+         // Get a fresh FFmpeg instance (heavy tool used to convert video)
         const ffmpeg = await getFFmpeg(true);
+        // Names inside FFmpeg “virtual file system”
         const inputName = file.name;
         const outputName = inputName.replace(/\.avi$/i, ".mp4");
-
+        // Put the file bytes into FFmpeg memory
         const data = new Uint8Array(await file.arrayBuffer());
         await ffmpeg.writeFile(inputName, data);
-
+        // Listen for FFmpeg progress and update progress bar
         ffmpeg.on("progress", ({ progress }: { progress: number }) => {
           setProcessing((prev) =>
             prev.map((p) =>
@@ -50,6 +53,7 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
           );
         });
 
+        // Run the FFmpeg convert command (AVI -> MP4)
         await ffmpeg.exec([
           "-i",
           inputName,
@@ -63,25 +67,22 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
           "aac",
           outputName,
         ]);
-
+        // Read the result MP4 back from FFmpeg memory
         const result = await ffmpeg.readFile(outputName);
+        // Turn it into a real browser File object
         const blob = new Blob([result.buffer], { type: "video/mp4" });
         const converted = new File([blob], outputName, { type: "video/mp4" });
-
+        // Clean up FFmpeg memory files
         await ffmpeg.deleteFile(inputName);
         await ffmpeg.deleteFile(outputName);
 
-        // Mark this conversion as done
         setProcessing((prev) =>
           prev.map((p) =>
             p.id === id ? { ...p, progress: 100, status: "done" } : p
           )
         );
-
-        // Add converted file to global store (store now dedupes, so one blob)
         addFiles([converted]);
 
-        // Remove from processing list after short delay and update isWorking based on remaining items
         setTimeout(() => {
           setProcessing((prev) => {
             const next = prev.filter((p) => p.id !== id);
@@ -94,25 +95,23 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
         }, 1200);
       } catch (err) {
         console.error("Conversion error:", err);
-        setProcessing((prev) =>
-          prev.map((p) =>
-            p.id === id ? { ...p, status: "error" } : p
-          )
-        );
-
-        setIsWorking((prevWorking) => {
-          // if this was the only job, flip it off
-          const anyOthers = processing.some(
+        setProcessing((prev) => {
+          const next: ProcessingFile[] = prev.map((p) =>
+            p.id === id ? { ...p, status: "error" as const } : p
+          );
+          const anyOthers = next.some(
             (p) => p.id !== id && p.status !== "done" && p.status !== "error"
           );
-          return anyOthers ? prevWorking : false;
+          setIsWorking(anyOthers);
+          return next;
         });
       }
     },
     [addFiles]
   );
 
-  // file drop
+
+  // Split normal files vs AVI, then process each group.
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
       if (!acceptedFiles.length) return;
@@ -120,22 +119,18 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
       const normalFiles = acceptedFiles.filter((f) => !isAvi(f));
       const aviFiles = acceptedFiles.filter(isAvi);
 
-      // We only show "working" if there is something to convert
       if (aviFiles.length > 0) {
         setIsWorking(true);
       }
 
-      // Normal files go straight to the store (store dedupes by file)
       if (normalFiles.length) {
         addFiles(normalFiles);
       }
 
-      // Convert all AVIs concurrently
       aviFiles.forEach((avi) => {
         convertAviToMp4(avi);
       });
 
-      // If there were *only* normal files → no background work, turn off working state
       if (aviFiles.length === 0) {
         setIsWorking(false);
       }
@@ -146,7 +141,7 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     multiple: true,
-    accept: { "video/*": [], "image/*": [] },
+    accept: { "video/*": [] },
   });
 
   return (
@@ -159,7 +154,7 @@ export function FileDropzone({ compact = false }: FileDropzoneProps) {
               ? "h-48"
               : isWorking
               ? "h-56"
-              : "h-[50vh]" // 🧩 shrink when working
+              : "h-[50vh]" 
           }
           ${
             isDragActive

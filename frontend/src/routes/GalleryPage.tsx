@@ -23,14 +23,18 @@ const statusStyles: Record<Status, { bg: string; text: string; label: string }> 
 };
 
 export function GalleryPage() {
+  // Which item is open in highlight editor modal
   const [highlightEditor, setHighlightEditor] = useState<MetadataItem | null>(null);
+  // Which item is open in edit pane
   const [editing, setEditing] = useState<MetadataItem | null>(null);
   const [savingMetadata, setSavingMetadata] = useState(false);
+  // UI: open/close filter panels
   const [showSidebarFilters, setShowSidebarFilters] = useState(false);
   const [mainFiltersOpen, setMainFiltersOpen] = useState(false);
   const [highlightAvailability, setHighlightAvailability] = useState<
     Record<string, { highlightFileId?: string; exists: boolean }>
   >({});
+  // Cache: signed thumbnail URLs for showing images in Display view
   const [signedThumbUrls, setSignedThumbUrls] = useState<Record<string, string>>({});
 
   const [filters, setFilters] = useState({
@@ -48,17 +52,23 @@ export function GalleryPage() {
   const API_URL = import.meta.env.VITE_API_URL;
   const location = useLocation();
   const { confirmState, setConfirmState, requestConfirm, requestAlert } = useConfirmDialog();
+  // Load all metadata rows from backend
   const { files, setFiles, loading, error } = useMetadata(API_URL);
+  // Apply filters + decide which "view" we are in from URL (?view=draft, etc.)
   const { filtered, view } = useFilteredMetadata(files, filters, location.search);
   useKeyboardNavigation(editing, filtered, setEditing);
   const { notify } = useToast();
+  // Used to measure table height (for auto rows per page)
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
-
+  // In draft and id view we use a “sidebar + editor” layout
   const isSidebarLayout = view === "draft" || view === "id";
+  // Sidebar layout is only active when something is being edited
   const useSidebarLayout = isSidebarLayout && !!editing;
+  // How many items per page (auto calculated)
   const [computedItemsPerPage, setComputedItemsPerPage] = useState(7);
   const itemsPerPage = useSidebarLayout ? 10 : computedItemsPerPage;
 
+  // Build dropdown options from existing files (Temp, will be replaced with API-driven lists later, when I have more data) 
   const uniqueValues = useMemo(() => {
     const getUnique = (key: keyof MetadataItem) =>
       Array.from(new Set(files.map((f) => f[key]).filter(Boolean))) as string[];
@@ -92,6 +102,7 @@ export function GalleryPage() {
       updatedSort: "desc",
     });
 
+  // Update one item locally (UI update without reloading)
   const updateLocal = (fileId: string, updates: Partial<MetadataItem>) => {
     setFiles((prev) => prev.map((f) => (f.fileId === fileId ? { ...f, ...updates } : f)));
   };
@@ -117,7 +128,7 @@ export function GalleryPage() {
       if (!res.ok || !result?.success) {
         throw new Error(result?.error || "Delete failed");
       }
-
+      // Remove from local list
       setFiles((prev) => prev.filter((f) => f.fileId !== fileId));
       setEditing((prev) => (prev?.fileId === fileId ? null : prev));
       setHighlightEditor((prev) => (prev?.fileId === fileId ? null : prev));
@@ -135,6 +146,7 @@ export function GalleryPage() {
     }
   };
 
+  // Click a row: open highlight editor for display/done, otherwise open edit pane.
   const handleRowClick = (file: MetadataItem) => {
     if (view === "display" || view === "done") {
       setHighlightEditor(file);
@@ -143,6 +155,7 @@ export function GalleryPage() {
     }
   };
 
+  // Toggle "Active / Inactive" for display view
   const toggleActive = async (file: MetadataItem, active: boolean) => {
     try {
       const displayState = active ? "Active" : "Inactive";
@@ -177,7 +190,9 @@ export function GalleryPage() {
     highlight?: boolean;
   }) => {
     if (!editing) return;
+    // Remember old stage so we can show the right toast
     const previousStage = deriveStatus(editing);
+    // If user tries to move to DONE, require all fields + Confirmed
     if (payload.status === "done") {
       const requiredFilled = [
         payload.species,
@@ -194,6 +209,7 @@ export function GalleryPage() {
         return;
       }
     }
+    // If user tries to move to DISPLAY, require all fields + Confirmed
     if (payload.status === "display") {
       const requiredFilled = [
         payload.species,
@@ -210,6 +226,7 @@ export function GalleryPage() {
         return;
       }
     }
+     // If status is DISPLAY, we consider it a highlight item
     const nextHighlight = payload.status === "display";
     const nextDisplay =
       payload.displayState ||
@@ -276,7 +293,7 @@ export function GalleryPage() {
           tone: "success",
         });
       }
-
+      // Auto-select next item after saving (nice for fast workflow)
       const currentIndex = filtered.findIndex((f) => f.fileId === editing.fileId);
       if (currentIndex >= 0 && currentIndex < filtered.length - 1) {
         setEditing(filtered[currentIndex + 1]);
@@ -298,12 +315,14 @@ export function GalleryPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [filtered, itemsPerPage]);
-
+  // Auto-calc how many rows fit on screen (when NOT using sidebar layout)
   useEffect(() => {
+    // Sidebar mode uses fixed 10
     if (useSidebarLayout) {
       setComputedItemsPerPage(10);
       return;
     }
+    // Compute rows per page based on viewport height.
     const measure = () => {
       const container = tableContainerRef.current;
       if (!container) return;
@@ -333,14 +352,16 @@ export function GalleryPage() {
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
   };
-
+  // Check if the highlight/trimmed video exists (so we can show the "Trimmed" checkbox)
   useEffect(() => {
     if (view !== "display") {
       setHighlightAvailability((prev) => (Object.keys(prev).length ? {} : prev));
       return;
     }
 
+    // Check highlight asset existence for display view.
     const controller = new AbortController();
+    // Only check items that have highlightFileId and are not already cached
     const filesToCheck = paginatedItems.filter((item) => {
       if (!item.highlightFileId) return false;
       const cached = highlightAvailability[item.fileId];
@@ -387,6 +408,7 @@ export function GalleryPage() {
     return () => controller.abort();
   }, [API_URL, paginatedItems, view]);
 
+  // Get signed URLs for thumbnails (so <img src="..."> works)
   useEffect(() => {
     if (view !== "display") {
       setSignedThumbUrls((prev) => (Object.keys(prev).length ? {} : prev));
@@ -396,14 +418,15 @@ export function GalleryPage() {
     const controller = new AbortController();
     const targets = paginatedItems
       .map((item) => {
-        const key = item.highlightThumbnailId || item.thumbnailId;
+        // Only show thumbnails for Display items with highlight thumbnails.
+        const key = item.highlightThumbnailId;
         if (!key) return null;
-        const type = item.highlightThumbnailId ? "highlight" : "default";
+        const type: "highlight" = "highlight";
         const cacheKey = `${type}:${key}`;
         if (signedThumbUrls[cacheKey]) return null;
         return { key, type, cacheKey };
       })
-      .filter(Boolean) as Array<{ key: string; type: "default" | "highlight"; cacheKey: string }>;
+      .filter(Boolean) as Array<{ key: string; type: "highlight"; cacheKey: string }>;
 
     if (!targets.length) return () => controller.abort();
 
@@ -603,8 +626,9 @@ export function GalleryPage() {
                           trimmedAvailability && trimmedAvailability.highlightFileId === file.highlightFileId
                             ? trimmedAvailability.exists
                             : Boolean(file.highlightFileId && file.highlightThumbnailId);
-                        const thumbKey = file.highlightThumbnailId || file.thumbnailId;
-                        const thumbType = file.highlightThumbnailId ? "highlight" : "default";
+                        // Only show highlight thumbnails in Display view.
+                        const thumbKey = file.highlightThumbnailId;
+                        const thumbType = "highlight";
                         const thumbCacheKey = thumbKey ? `${thumbType}:${thumbKey}` : null;
                         const thumbUrl = thumbCacheKey ? signedThumbUrls[thumbCacheKey] : null;
 

@@ -1,9 +1,9 @@
-### TODOS: 
-S3 Event → Lambda → DynamoDB set up (done) 
-
+### TODOS:  
 adjust the pagnation buffer to how many itmes calc, check for draft/id/done for when default and when filters are toggle and same for display.
+
 Pythonscript to cross-check iNaturalist vs IUCN (ask veni) 
-Make manual select plot/sensor/exp etc be based on a ddb table not from what exist in the table atm 
+Make manual select plot/sensor/exp etc be based on a ddb table not from what exist in the table atm  (block - wait for correct data)
+AVI converter fail to display within edit metadata. (worth fixing, are we gonna keep client-side converting?)
 
 ### ui improvemnt: 
 workshop better/more clear naming for "id" and "done" (stina suggestion)

@@ -8,6 +8,7 @@ export type HexLoaderProps = {
 };
 
 export const HexLoader: React.FC<HexLoaderProps> = ({ size = 72, label, className }) => {
+  // CSS-driven loader; size controlled via a CSS variable.
   return (
     <div
       className={`hex-loader ${className ?? ""}`.trim()}

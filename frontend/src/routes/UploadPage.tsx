@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useImageStore } from "../state/useImageStore";
+import { PendingUploadsProvider, usePendingUploads } from "../state/usePendingUploads";
 import { FileDropzone } from "../components/FileDropzone";
 import backgroundImage from "../assets/forst.png";
 import { useToast } from "../components/ToastProvider";
@@ -13,32 +13,32 @@ type UploadedFile = {
   uploading?: boolean;
 };
 
-export function UploadPage() {
-  const { images, updateImage } = useImageStore();
+function UploadPageContent() {
+  const { videos, updateVideo } = usePendingUploads();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const navigate = useNavigate();
   const { notify } = useToast();
 
   const API_URL = import.meta.env.VITE_API_URL;
 
-  const unsaved = useMemo(() => images.filter((img) => !img.saved), [images]);
+  const unsaved = useMemo(() => videos.filter((video) => !video.saved), [videos]);
 
-  function getFileNameFromImage(img: { file?: File | undefined; id: string }) {
-    if (img.file && img.file.name) return img.file.name;
-    return `capture_${img.id.slice(0, 6)}.mp4`;
+  function getFileNameFromVideo(video: { file?: File | undefined; id: string }) {
+    if (video.file && video.file.name) return video.file.name;
+    return `capture_${video.id.slice(0, 6)}.mp4`;
   }
 
   useEffect(() => {
-    const next = images.map((img) => ({
-      id: img.id,
-      name: getFileNameFromImage(img),
-      progress: img.progress ?? 0,
-      done: Boolean(img.saved),
-      uploading: Boolean(img.uploading),
+    const next = videos.map((video) => ({
+      id: video.id,
+      name: getFileNameFromVideo(video),
+      progress: video.progress ?? 0,
+      done: Boolean(video.saved),
+      uploading: Boolean(video.uploading),
     }));
 
     setUploadedFiles(next);
-  }, [images]);
+  }, [videos]);
 
   const total = uploadedFiles.length;
   const done = uploadedFiles.filter((f) => f.done).length;
@@ -54,31 +54,33 @@ export function UploadPage() {
     });
   }, [uploadedFiles]);
 
-  async function uploadSingle(img: (typeof unsaved)[number]) {
-    if (!img.file) return;
+  // Upload one file to S3, then create its metadata row.
+  async function uploadSingle(video: (typeof unsaved)[number]) {
+    if (!video.file) return;
     try {
-      updateImage(img.id, { uploading: true, progress: 0 });
-
+      updateVideo(video.id, { uploading: true, progress: 0 });
+       // Step 1: ask backend for uploadUrl + key
       const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: img.file.name,
-          contentType: img.file.type || "application/octet-stream",
+          filename: video.file.name,
+          contentType: video.file.type || "application/octet-stream",
         }),
       });
 
       const { uploadUrl, key } = await presignRes.json();
       if (!uploadUrl || !key) throw new Error("Missing upload URL");
-
+      // Step 2: upload to storage with progress updates
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", img.file!.type || "application/octet-stream");
+        xhr.setRequestHeader("Content-Type", video.file!.type || "application/octet-stream");
+        // Update progress bar
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
             const pct = Math.round((e.loaded / e.total) * 100);
-            updateImage(img.id, { progress: pct });
+            updateVideo(video.id, { progress: pct });
           }
         };
         xhr.onload = () => {
@@ -86,56 +88,55 @@ export function UploadPage() {
           else reject(new Error(`Upload failed (${xhr.status})`));
         };
         xhr.onerror = () => reject(new Error("Network error"));
-        xhr.send(img.file);
+        xhr.send(video.file);
       });
-
+      // Step 3: create metadata row immediately so app uploads show up right away.
+      // The S3 Lambda is a safety net + handles external uploads.
       await fetch(`${API_URL}/api/upload/metadata`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fileId: key,
-          filename: img.file.name,
-          species: img.species,
-          plot: img.plot,
-          experiencePoint: img.experiencePoint,
-          sensorId: img.sensorId,
-          deploymentId: img.deploymentId,
+          filename: video.file.name,
+          // For now: metadata not set here (all undefined)
+          species: undefined,
+          plot: undefined,
+          experiencePoint: undefined,
+          sensorId: undefined,
+          deploymentId: undefined,
           thumbnailId: undefined,
           displayState: "Inactive",
           highlight: false,
-          stage: "draft",
         }),
       });
 
-      updateImage(img.id, {
+      updateVideo(video.id, {
         uploading: false,
         progress: 100,
         saved: true,
-        deploymentId: img.deploymentId,
-        sensorId: img.sensorId,
-        stage: "draft",
       });
       notify({
         title: "Upload complete",
-        message: `${img.file.name} saved to Draft.`,
+        message: `${video.file.name} saved to Draft.`,
         tone: "success",
       });
     } catch (err) {
       console.error("Upload error", err);
-      updateImage(img.id, { uploading: false });
+      updateVideo(video.id, { uploading: false });
       notify({
         title: "Upload failed",
-        message: `${img.file?.name ?? img.id}: ${err instanceof Error ? err.message : "Unable to upload."}`,
+        message: `${video.file?.name ?? video.id}: ${err instanceof Error ? err.message : "Unable to upload."}`,
         tone: "error",
       });
     }
   }
 
+  // Auto-upload any pending files.
   useEffect(() => {
-    const pending = unsaved.filter((img) => !img.uploading && !img.saved);
+    const pending = unsaved.filter((video) => !video.uploading && !video.saved);
     if (!pending.length) return;
-    pending.forEach((img) => {
-      void uploadSingle(img);
+    pending.forEach((video) => {
+      void uploadSingle(video);
     });
   }, [unsaved]);
 
@@ -250,5 +251,14 @@ export function UploadPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+// Wrapper: gives UploadPageContent access to the pending uploads store
+export function UploadPage() {
+  return (
+    <PendingUploadsProvider>
+      <UploadPageContent />
+    </PendingUploadsProvider>
   );
 }

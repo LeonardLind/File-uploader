@@ -23,7 +23,7 @@ type Props = {
   onChange: (key: keyof Filters, value: string) => void;
   onClear?: () => void;
   showClear?: boolean;
-  layout?: "flex" | "grid";
+  layout?: "flex" | "grid"; // Default flex; grid used in the Filters modal.
 };
 
 export function GalleryFilterBar({
@@ -35,6 +35,7 @@ export function GalleryFilterBar({
   layout = "flex",
 }: Props) {
   const shouldShowClear = showClear && typeof onClear === "function";
+  // Fields shown in the filter bar, in order.
   const filterFields = [
     ["species", "Species"],
     ["plot", "Plot"],

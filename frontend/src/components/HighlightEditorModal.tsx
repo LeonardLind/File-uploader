@@ -14,14 +14,12 @@ type Props = {
     title: string;
     message: string;
     confirmLabel?: string;
-    cancelLabel?: string;
     tone?: "danger" | "info";
-    hideCancel?: boolean;
   }) => Promise<boolean>;
 };
 
-const MIN_CLIP_GAP = 0.1;
-const END_STOP_EPS = 0.05;
+const MIN_CLIP_GAP = 1.0; // Seconds
+const END_STOP_EPS = 0.05; // Tiny buffer to avoid flash/black end frame 
 
 type TimelineProps = {
   duration: number;
@@ -32,6 +30,7 @@ type TimelineProps = {
   onPreview?: (time: number, options?: { captureFrame?: boolean }) => void;
 };
 
+// A draggable handle on the timeline
 type HandleProps = {
   position: string;
   color: string;
@@ -58,11 +57,12 @@ function Handle({ position, color, label, onPointerDown }: HandleProps) {
 }
 
 function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview }: TimelineProps) {
+  // Keep a handle to the timeline bar so we can measure clicks/drags.
   const barRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState<"start" | "end" | "thumb" | null>(null);
-
+  // Clamps the time to not go below 0 or above duration.
   const clampTime = useCallback((value: number) => Math.min(Math.max(value, 0), duration), [duration]);
-
+  // Map a video time to an x-position on the timeline bar.
   const frameToClient = (time: number) => {
     const bar = barRef.current;
     if (!bar) return 0;
@@ -70,6 +70,7 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
     return rect.left + (time / duration) * rect.width;
   };
 
+  // when user clicks timeline, pick the nearest handle to move
   const chooseHandle = (clientX: number) => {
     const distances = [
       { key: "start" as const, dist: Math.abs(frameToClient(trimStart) - clientX) },
@@ -80,12 +81,15 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
     return distances[0].key;
   };
 
+  // main math: mouse X -> new trimStart / trimEnd / frameTime
   const updateFromClientX = useCallback(
     (clientX: number, handle: "start" | "end" | "thumb") => {
       const bar = barRef.current;
       if (!bar) return;
       const rect = bar.getBoundingClientRect();
+      // ratio 0..1 based on click position inside bar
       const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+      // turn ratio into seconds
       const rawTime = clampTime(ratio * duration);
 
       let nextStart = trimStart;
@@ -116,6 +120,7 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
     [clampTime, duration, frameTime, onChange, onPreview, trimEnd, trimStart]
   );
 
+  // while dragging: listen to pointer move/up on window
   useEffect(() => {
     if (!dragging) return;
     const handleMove = (e: PointerEvent) => updateFromClientX(e.clientX, dragging);
@@ -128,6 +133,7 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
     };
   }, [dragging, updateFromClientX]);
 
+  // make handles not touch the exact edges, looks nicer
   const INSET_PCT = 2;
   const insetPct = (time: number) => `${(time / duration) * (100 - INSET_PCT * 2) + INSET_PCT}%`;
 
@@ -161,30 +167,37 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
   );
 }
 
+// Convert a data URL (from canvas) into a Blob for upload.
 function dataUrlToBlob(dataUrl: string) {
-  const [meta, content] = dataUrl.split(",");
-  const mime = meta.match(/:(.*?);/)?.[1] ?? "image/jpeg";
-  const binary = atob(content);
-  const array = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i);
-  return new Blob([array], { type: mime });
+  const [meta, content] = dataUrl.split(","); // Split the label part and the image data.
+  const mime = meta.match(/:(.*?);/)?.[1] ?? "image/jpeg"; // Figure out the image type (jpg/png).
+  const binary = atob(content); // Turn the base64 text back into raw bytes.
+  const array = new Uint8Array(binary.length); // Make a byte list we can upload.
+  for (let i = 0; i < binary.length; i++) array[i] = binary.charCodeAt(i); // Copy bytes into the list.
+  return new Blob([array], { type: mime }); // Build the final file for upload.
 }
 
 export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestConfirm }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // main timeline values
   const [duration, setDuration] = useState<number | null>(null);
   const [trimStart, setTrimStart] = useState<number>(file.trimStartSec ?? 0);
   const [trimEnd, setTrimEnd] = useState<number>(file.trimEndSec ?? 0);
   const [frameTime, setFrameTime] = useState<number>(file.trimStartSec ?? 0);
+   // thumbnail preview image (data URL)
   const [framePreview, setFramePreview] = useState<string | null>(null);
+  // saving states
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // when there is already a highlight, show a prompt (replace?)
   const [showReplacePrompt, setShowReplacePrompt] = useState(false);
   const [replaceVideo, setReplaceVideo] = useState(true);
   const [replaceThumbnail, setReplaceThumbnail] = useState(true);
+  // revert/delete states
   const [reverting, setReverting] = useState(false);
   const [revertingToId, setRevertingToId] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
@@ -209,7 +222,8 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         : existingHighlightThumb
             ? "This file already has a thumbnail. Choose what to replace or keep."
             : "This file already has a trimmed video and/or thumbnail. Choose what to replace or keep.";
-
+  
+  // Play always start from trimStart
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
@@ -248,7 +262,8 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     },
     []
   );
-
+  
+  // Grab a frame from the video and return it as a JPG data URL
   const captureFrameDataUrl = () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth || !video.videoHeight) return null;
@@ -258,9 +273,10 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.9);
+    return canvas.toDataURL("image/jpeg", 1); // Turn the frame into a base64 image string (easy to pass around).
+    // Quality set to 1 to keep true quality, browser default set 0.92 to keep size down. (Andrew - "Storage is not a problem")
   };
-
+  // Save that frame into state (for thumbnail preview)
   const captureFrame = useCallback(() => {
     const dataUrl = captureFrameDataUrl();
     if (dataUrl) {
@@ -303,7 +319,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       captureFrame();
     }
   }, [captureFrame, frameTime]);
-
+  // Reset local UI state when switching files.
   useEffect(() => {
     setShowReplacePrompt(false);
     setReplaceVideo(true);
@@ -322,6 +338,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     setVideoLoading(true);
     setVideoUrl(null);
 
+    // Load a signed URL for the source video.
     (async () => {
       try {
         const url = await fetchSignedUrl({
@@ -352,6 +369,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       return;
     }
 
+    // Check if a highlight video already exists for this item.
     const controller = new AbortController();
     (async () => {
       try {
@@ -406,6 +424,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
   }, [isRecording, trimEnd]);
 
   const recordTrimmedSegment = async () => {
+    // Record the selected clip using MediaRecorder.
     const video = videoRef.current;
     if (!video) {
       throw new Error("Video not ready for trimming.");
@@ -465,9 +484,11 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         resolve(new Blob(chunks, { type: recorder.mimeType || "video/webm" }));
       };
 
+      // start recording
       video.addEventListener("timeupdate", handleTimeUpdate);
       video.currentTime = start;
       recorder.start();
+      // play the video so captureStream produces frames
       video
         .play()
         .catch((err) => {
@@ -479,6 +500,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
   };
 
   const performSave = async (options: { replaceVideo: boolean; replaceThumbnail: boolean }) => {
+    // Upload trimmed video and/or thumbnail, then update metadata.
     const { replaceVideo: doReplaceVideo, replaceThumbnail: doReplaceThumbnail } = options;
     const needsVideoUpload = doReplaceVideo || !file.highlightFileId;
 
@@ -505,14 +527,16 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     setError(null);
 
     try {
+      // these are the "final" highlight ids we will save
       let highlightFileId = file.highlightFileId;
       let nextTrimStart = existingTrimStart;
       let nextTrimEnd = existingTrimEnd;
-
+       // Upload trimmed video (if needed)
       if (needsVideoUpload) {
+        // 1) record the trimmed part as blob
         const trimmedBlob = await recordTrimmedSegment();
         const videoContentType = trimmedBlob.type || "video/webm";
-
+        // 2) ask backend for upload URL + key
         const videoPresignRes = await fetch(`${apiUrl}/api/upload/presign`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -527,23 +551,25 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         if (!videoPresignData?.uploadUrl || !videoPresignData?.key) {
           throw new Error("Failed to get upload URL for trimmed video");
         }
-
+        // 3) upload directly to S3 (PUT)
         await fetch(videoPresignData.uploadUrl, {
           method: "PUT",
           headers: { "Content-Type": videoContentType },
           body: trimmedBlob,
         });
-
+        // 4) store new key and new trim times
         highlightFileId = videoPresignData.key;
         nextTrimStart = trimStart;
         nextTrimEnd = trimEnd;
       }
 
       let highlightThumbnailId = file.highlightThumbnailId || file.thumbnailId;
-
+      // Upload thumbnail (if needed)
       if (doReplaceThumbnail) {
         if (!currentThumbnail) throw new Error("Capture a frame before replacing the thumbnail");
+        // convert dataURL -> blob so we can upload it
         const blob = dataUrlToBlob(currentThumbnail);
+        // ask backend for upload url + key
         const presignRes = await fetch(`${apiUrl}/api/upload/presign`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -558,20 +584,20 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         if (!presignData.uploadUrl || !presignData.key) {
           throw new Error("Failed to get upload URL for thumbnail");
         }
-
+        // upload to S3
         await fetch(presignData.uploadUrl, {
           method: "PUT",
           headers: { "Content-Type": "image/jpeg" },
           body: blob,
         });
-
+        // store new key
         highlightThumbnailId = presignData.key;
       }
 
       if (!highlightFileId) {
         throw new Error("Highlight video was not created. Please try again.");
       }
-
+      //Tell backend: "this file now has highlight assets"
       const saveRes = await fetch(`${apiUrl}/api/upload/highlight`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -582,6 +608,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
           trimStartSec: nextTrimStart,
           trimEndSec: nextTrimEnd,
           filename: file.filename,
+          // include the rest of metadata so server can keep row consistent
           species: file.species,
           species_source: file.species_source,
           domesticated_common_name: file.domesticated_common_name,
@@ -631,7 +658,6 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       title: "Revert to ID?",
       message: "This will move the item back to ID stage.",
       confirmLabel: "Yes, revert",
-      cancelLabel: "Cancel",
       tone: "danger",
     });
     if (!confirmed) return;
@@ -684,7 +710,6 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       title: "Delete highlight?",
       message: "This will delete the highlight video/thumbnail and move the item back to Done.",
       confirmLabel: "Delete highlight",
-      cancelLabel: "Cancel",
       tone: "danger",
     });
     if (!confirmed) return;
@@ -730,7 +755,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       setDeleting(false);
     }
   };
-
+  // If highlight exists already: show options first.
   const handleSaveClick = () => {
     if (hasExistingHighlightAssets) {
       setReplaceVideo(true);
@@ -747,7 +772,6 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       title: "Revert to Done?",
       message: "This will delete the highlight video and thumbnail and move the item back to Done.",
       confirmLabel: "Yes, revert",
-      cancelLabel: "Cancel",
       tone: "danger",
     });
     if (!confirmed) return;

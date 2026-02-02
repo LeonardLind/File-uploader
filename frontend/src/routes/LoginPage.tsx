@@ -14,6 +14,7 @@ export function LoginPage() {
   const VALID_USER = import.meta.env.VITE_LOGIN_USER;
   const VALID_PASS = import.meta.env.VITE_LOGIN_PASS;
 
+  // Simple client-side auth check using env credentials.
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 

@@ -1,10 +1,12 @@
 import { loadFFmpeg } from "./ffmpegLoader";
 
+// We keep ONE FFmpeg in memory for the whole app
 let ffmpegInstance: any = null;
 let fetchFileFn: any = null;
 
 
 export async function getFFmpeg(fresh = false) {
+  // Reuse a single ffmpeg instance unless a fresh one is requested.
   if (fresh) {
     const { ffmpeg } = await loadFFmpeg();
     return ffmpeg;

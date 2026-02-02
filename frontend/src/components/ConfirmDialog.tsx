@@ -35,6 +35,7 @@ export function ConfirmDialog({
           <button
             onClick={onCancel}
             className="px-2.5 py-1 text-sm rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
+            aria-label="Close"
           >
             ✕
           </button>

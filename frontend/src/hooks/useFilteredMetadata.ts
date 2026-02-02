@@ -17,6 +17,7 @@ export function useFilteredMetadata(
   filters: Filters,
   locationSearch: string
 ) {
+  // Read the URL to know which tab (draft/id/done/display) is active.
   const view = useMemo<ViewFilter>(() => {
     const rawView = new URLSearchParams(locationSearch).get("view");
     return rawView === "id"
@@ -28,6 +29,7 @@ export function useFilteredMetadata(
       : "draft";
   }, [locationSearch]);
 
+  // Apply filters, view, and sort order.
   const filtered = useMemo(() => {
     let result = [...files];
 

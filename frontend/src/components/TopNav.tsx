@@ -45,6 +45,7 @@ export function TopNav() {
     [summaryItems]
   );
 
+  // Fetch confirmed species summary for the overview modal.
   const loadSummary = async () => {
     try {
       setSummaryLoading(true);
@@ -67,6 +68,7 @@ export function TopNav() {
     loadSummary();
   }, [summaryOpen]);
 
+  // Map IUCN status code to badge styling.
   const statusTone = (code?: string | null) => {
     switch (code) {
       case "CR":
