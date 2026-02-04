@@ -113,7 +113,6 @@ export function GalleryPage() {
       title: "Delete file?",
       message: "This will permanently remove the video from S3 and delete its metadata.",
       confirmLabel: "Delete",
-      cancelLabel: "Cancel",
       tone: "danger",
     });
     if (!confirmed) return;
