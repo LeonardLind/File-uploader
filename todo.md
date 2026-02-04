@@ -5,9 +5,11 @@ Pythonscript to cross-check iNaturalist vs IUCN (ask veni)
 Make manual select plot/sensor/exp etc be based on a ddb table not from what exist in the table atm  (block - wait for correct data)
 AVI converter fail to display within edit metadata. (worth fixing, are we gonna keep client-side converting?)
 
+
 ### ui improvemnt: 
-workshop better/more clear naming for "id" and "done" (stina suggestion)
 Change logo to new logo (stina mention)
+workshop better/more clear naming for "id" and "done" (stina suggestion)
+multi select option in draft/id to edit multible files at the same time - veni suggestion
 Change the temp backround login/upload forest img
 Highlight EDITOR reconsider layout for right aside. 
 
