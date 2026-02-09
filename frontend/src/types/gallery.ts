@@ -1,3 +1,5 @@
+import type { IdState } from "../utils/galleryUtils";
+
 // Frontend type for the metadata we expect from DynamoDB.
 export type MetadataItem = {
   fileId: string;
@@ -17,6 +19,6 @@ export type MetadataItem = {
   stage?: "draft" | "id" | "done" | "display";
   trimStartSec?: number;
   trimEndSec?: number;
-  id_state?: string;
+  id_state?: IdState;
   highlightFileId?: string;
 };

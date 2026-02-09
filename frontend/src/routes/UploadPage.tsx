@@ -4,6 +4,7 @@ import { PendingUploadsProvider, usePendingUploads } from "../state/usePendingUp
 import { FileDropzone } from "../components/FileDropzone";
 import backgroundImage from "../assets/forst.png";
 import { useToast } from "../components/ToastProvider";
+import { createMetadata, presignUpload } from "../api/uploadApi";
 
 type UploadedFile = {
   id: string;
@@ -60,16 +61,10 @@ function UploadPageContent() {
     try {
       updateVideo(video.id, { uploading: true, progress: 0 });
        // Step 1: ask backend for uploadUrl + key
-      const presignRes = await fetch(`${API_URL}/api/upload/presign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filename: video.file.name,
-          contentType: video.file.type || "application/octet-stream",
-        }),
+      const { uploadUrl, key } = await presignUpload(API_URL, {
+        filename: video.file.name,
+        contentType: video.file.type || "application/octet-stream",
       });
-
-      const { uploadUrl, key } = await presignRes.json();
       if (!uploadUrl || !key) throw new Error("Missing upload URL");
       // Step 2: upload to storage with progress updates
       await new Promise<void>((resolve, reject) => {
@@ -92,22 +87,18 @@ function UploadPageContent() {
       });
       // Step 3: create metadata row immediately so app uploads show up right away.
       // The S3 Lambda is a safety net + handles external uploads.
-      await fetch(`${API_URL}/api/upload/metadata`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: key,
-          filename: video.file.name,
-          // For now: metadata not set here (all undefined)
-          species: undefined,
-          plot: undefined,
-          experiencePoint: undefined,
-          sensorId: undefined,
-          deploymentId: undefined,
-          thumbnailId: undefined,
-          displayState: "Inactive",
-          highlight: false,
-        }),
+      await createMetadata(API_URL, {
+        fileId: key,
+        filename: video.file.name,
+        // For now: metadata not set here (all undefined)
+        species: undefined,
+        plot: undefined,
+        experiencePoint: undefined,
+        sensorId: undefined,
+        deploymentId: undefined,
+        thumbnailId: undefined,
+        displayState: "Inactive",
+        highlight: false,
       });
 
       updateVideo(video.id, {

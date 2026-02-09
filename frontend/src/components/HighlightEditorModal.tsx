@@ -3,13 +3,17 @@ import { deriveStatus } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
 import { HexLoader } from "./HexLoader";
 import { useToast } from "./ToastProvider";
-import { fetchSignedUrl } from "../utils/signedUrl";
+import { useSignedUrl } from "../hooks/useSignedUrl";
+import { useDeleteFile } from "../hooks/useDeleteFile";
+import { checkHighlightExists, deleteHighlight, presignUpload, saveHighlight, updateMetadata } from "../api/uploadApi";
+import { useToggle } from "../hooks/useToggle";
 
 type Props = {
   file: MetadataItem;
   apiUrl: string;
   onClose: () => void;
   onSaved: (updates: Partial<MetadataItem>) => void;
+  onDeleted: (fileId: string) => void;
   requestConfirm: (options: {
     title: string;
     message: string;
@@ -60,6 +64,8 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
   // Keep a handle to the timeline bar so we can measure clicks/drags.
   const barRef = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState<"start" | "end" | "thumb" | null>(null);
+  const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 1;
+  const minGap = Math.min(MIN_CLIP_GAP, Math.max(safeDuration - 0.01, 0));
   // Clamps the time to not go below 0 or above duration.
   const clampTime = useCallback((value: number) => Math.min(Math.max(value, 0), duration), [duration]);
   // Map a video time to an x-position on the timeline bar.
@@ -67,7 +73,7 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
     const bar = barRef.current;
     if (!bar) return 0;
     const rect = bar.getBoundingClientRect();
-    return rect.left + (time / duration) * rect.width;
+    return rect.left + (time / safeDuration) * rect.width;
   };
 
   // when user clicks timeline, pick the nearest handle to move
@@ -84,6 +90,7 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
   // main math: mouse X -> new trimStart / trimEnd / frameTime
   const updateFromClientX = useCallback(
     (clientX: number, handle: "start" | "end" | "thumb") => {
+      if (!Number.isFinite(duration) || duration <= 0) return;
       const bar = barRef.current;
       if (!bar) return;
       const rect = bar.getBoundingClientRect();
@@ -97,14 +104,14 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
       let nextFrame = frameTime;
 
       if (handle === "start") {
-        nextStart = Math.min(rawTime, nextEnd - MIN_CLIP_GAP);
+        nextStart = Math.min(rawTime, nextEnd - minGap);
         nextStart = clampTime(nextStart);
         if (frameTime < nextStart) {
           nextFrame = nextStart;
         }
         onPreview?.(nextStart, { captureFrame: false });
       } else if (handle === "end") {
-        nextEnd = Math.max(rawTime, nextStart + MIN_CLIP_GAP);
+        nextEnd = Math.max(rawTime, nextStart + minGap);
         nextEnd = clampTime(nextEnd);
         if (frameTime > nextEnd) {
           nextFrame = nextEnd;
@@ -117,7 +124,7 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
 
       onChange({ trimStart: nextStart, trimEnd: nextEnd, frameTime: nextFrame });
     },
-    [clampTime, duration, frameTime, onChange, onPreview, trimEnd, trimStart]
+    [clampTime, duration, frameTime, minGap, onChange, onPreview, trimEnd, trimStart]
   );
 
   // while dragging: listen to pointer move/up on window
@@ -135,7 +142,7 @@ function Timeline({ duration, trimStart, trimEnd, frameTime, onChange, onPreview
 
   // make handles not touch the exact edges, looks nicer
   const INSET_PCT = 2;
-  const insetPct = (time: number) => `${(time / duration) * (100 - INSET_PCT * 2) + INSET_PCT}%`;
+  const insetPct = (time: number) => `${(time / safeDuration) * (100 - INSET_PCT * 2) + INSET_PCT}%`;
 
   const startPct = insetPct(trimStart);
   const endPct = insetPct(trimEnd);
@@ -177,8 +184,10 @@ function dataUrlToBlob(dataUrl: string) {
   return new Blob([array], { type: mime }); // Build the final file for upload.
 }
 
-export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestConfirm }: Props) {
+export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, onDeleted, requestConfirm }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const pendingFrameCaptureRef = useRef(false);
+  const saveTokenRef = useRef(0);
   // main timeline values
   const [duration, setDuration] = useState<number | null>(null);
   const [trimStart, setTrimStart] = useState<number>(file.trimStartSec ?? 0);
@@ -190,7 +199,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // when there is already a highlight, show a prompt (replace?)
-  const [showReplacePrompt, setShowReplacePrompt] = useState(false);
+  const replacePrompt = useToggle(false);
   const [replaceVideo, setReplaceVideo] = useState(true);
   const [replaceThumbnail, setReplaceThumbnail] = useState(true);
   // revert/delete states
@@ -202,17 +211,16 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
   const [isRecording, setIsRecording] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [highlightVideoExists, setHighlightVideoExists] = useState<boolean | null>(null);
   const suppressFrameCaptureRef = useRef(false);
   const effectiveStage = deriveStatus(file);
   const showIdActions = effectiveStage === "done";
   const { notify } = useToast();
+  const { deleteFile } = useDeleteFile(apiUrl);
 
-  const hasExistingHighlightAssets = Boolean(file.highlightFileId || file.highlightThumbnailId);
-  const existingHighlightVideo =
-    highlightVideoExists ?? Boolean(file.highlightFileId);
+  const existingHighlightVideo = highlightVideoExists ?? Boolean(file.highlightFileId);
   const existingHighlightThumb = Boolean(file.highlightThumbnailId);
+  const hasExistingHighlightAssets = existingHighlightVideo || existingHighlightThumb;
   const existingTrimStart = file.trimStartSec ?? 0;
   const existingTrimEnd = file.trimEndSec ?? 0;
   const replacePromptMessage = existingHighlightVideo && existingHighlightThumb
@@ -288,11 +296,14 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     (time: number, options?: { captureFrame?: boolean }) => {
       const video = videoRef.current;
       if (!video) return;
-      suppressFrameCaptureRef.current = options?.captureFrame === false;
-      video.currentTime = time;
-      if (options?.captureFrame !== false) {
-        captureFrame();
+      const shouldCapture = options?.captureFrame !== false;
+      suppressFrameCaptureRef.current = !shouldCapture;
+      if (Math.abs(video.currentTime - time) < 0.01) {
+        if (shouldCapture) captureFrame();
+        return;
       }
+      if (shouldCapture) pendingFrameCaptureRef.current = true;
+      video.currentTime = time;
     },
     [captureFrame]
   );
@@ -305,7 +316,10 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         suppressFrameCaptureRef.current = false;
         return;
       }
-      captureFrame();
+      if (pendingFrameCaptureRef.current) {
+        pendingFrameCaptureRef.current = false;
+        captureFrame();
+      }
     };
     video.addEventListener("seeked", handleSeeked);
     return () => video.removeEventListener("seeked", handleSeeked);
@@ -314,14 +328,18 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    video.currentTime = frameTime;
-    if (Math.abs(video.currentTime - frameTime) < 0.01) {
+    const current = video.currentTime;
+    if (Math.abs(current - frameTime) < 0.01) {
       captureFrame();
+    } else {
+      pendingFrameCaptureRef.current = true;
+      video.currentTime = frameTime;
     }
   }, [captureFrame, frameTime]);
   // Reset local UI state when switching files.
   useEffect(() => {
-    setShowReplacePrompt(false);
+    saveTokenRef.current += 1;
+    replacePrompt.close();
     setReplaceVideo(true);
     setReplaceThumbnail(true);
     setError(null);
@@ -329,39 +347,22 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     setVideoLoading(true);
     setVideoDuration(null);
     setHighlightVideoExists(null);
-    setVideoUrl(null);
+    setSaving(false);
   }, [file.fileId]);
 
+  const { url: videoUrl, error: videoUrlError } = useSignedUrl({
+    apiUrl,
+    key: file.fileId,
+    type: "default",
+    enabled: Boolean(file.fileId),
+  });
+
   useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
-    setVideoLoading(true);
-    setVideoUrl(null);
-
-    // Load a signed URL for the source video.
-    (async () => {
-      try {
-        const url = await fetchSignedUrl({
-          apiUrl,
-          key: file.fileId,
-          type: "default",
-          signal: controller.signal,
-        });
-        if (!active) return;
-        setVideoUrl(url);
-      } catch (err) {
-        if (!controller.signal.aborted) {
-          console.warn("Failed to load signed video URL", err);
-          setVideoLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      active = false;
-      controller.abort();
-    };
-  }, [apiUrl, file.fileId]);
+    if (videoUrlError) {
+      console.warn("Failed to load signed video URL", videoUrlError);
+      setVideoLoading(false);
+    }
+  }, [videoUrlError]);
 
   useEffect(() => {
     if (!file.highlightFileId) {
@@ -373,19 +374,11 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     const controller = new AbortController();
     (async () => {
       try {
-        const res = await fetch(`${apiUrl}/api/upload/highlight/exists`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fileId: file.fileId,
-            highlightFileId: file.highlightFileId,
-          }),
-          signal: controller.signal,
-        });
-        const data = await res.json();
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error || "Highlight check failed");
-        }
+        const data = await checkHighlightExists(
+          apiUrl,
+          { fileId: file.fileId, highlightFileId: file.highlightFileId },
+          controller.signal
+        );
         setHighlightVideoExists(Boolean(data.exists));
       } catch (err: unknown) {
         if (controller.signal.aborted) return;
@@ -423,6 +416,12 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     return () => video.removeEventListener("timeupdate", handleTimeUpdate);
   }, [isRecording, trimEnd]);
 
+  const getPreferredRecorderMimeType = () => {
+    if (typeof MediaRecorder === "undefined") return undefined;
+    const candidates = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    return candidates.find((type) => MediaRecorder.isTypeSupported(type));
+  };
+
   const recordTrimmedSegment = async () => {
     // Record the selected clip using MediaRecorder.
     const video = videoRef.current;
@@ -432,8 +431,11 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     if (typeof MediaRecorder === "undefined") {
       throw new Error("MediaRecorder not supported in this browser.");
     }
-    // @ts-expect-error captureStream exists on HTMLMediaElement in modern browsers
-    const capture = video.captureStream?.() || video.mozCaptureStream?.();
+    const captureSource = video as HTMLVideoElement & {
+      captureStream?: () => MediaStream;
+      mozCaptureStream?: () => MediaStream;
+    };
+    const capture = captureSource.captureStream?.() || captureSource.mozCaptureStream?.();
     if (!capture) {
       throw new Error("Video capture is not supported in this browser.");
     }
@@ -444,7 +446,10 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       throw new Error("Invalid trim range.");
     }
 
-    const recorder = new MediaRecorder(capture, { mimeType: "video/webm" });
+    const preferredMimeType = getPreferredRecorderMimeType();
+    const recorder = preferredMimeType
+      ? new MediaRecorder(capture, { mimeType: preferredMimeType })
+      : new MediaRecorder(capture);
     const chunks: BlobPart[] = [];
 
     return await new Promise<Blob>((resolve, reject) => {
@@ -500,14 +505,12 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
   };
 
   const performSave = async (options: { replaceVideo: boolean; replaceThumbnail: boolean }) => {
+    const saveToken = ++saveTokenRef.current;
+    const activeFileId = file.fileId;
+    const isStale = () => saveToken !== saveTokenRef.current || file.fileId !== activeFileId;
     // Upload trimmed video and/or thumbnail, then update metadata.
     const { replaceVideo: doReplaceVideo, replaceThumbnail: doReplaceThumbnail } = options;
     const needsVideoUpload = doReplaceVideo || !file.highlightFileId;
-
-    if (!needsVideoUpload && !file.highlightFileId) {
-      setError("A highlight video is required. Please enable replace video.");
-      return;
-    }
 
     let currentThumbnail = framePreview;
     if (doReplaceThumbnail && !currentThumbnail) {
@@ -527,6 +530,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     setError(null);
 
     try {
+      if (isStale()) return;
       // these are the "final" highlight ids we will save
       let highlightFileId = file.highlightFileId;
       let nextTrimStart = existingTrimStart;
@@ -535,19 +539,15 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       if (needsVideoUpload) {
         // 1) record the trimmed part as blob
         const trimmedBlob = await recordTrimmedSegment();
+        if (isStale()) return;
         const videoContentType = trimmedBlob.type || "video/webm";
         // 2) ask backend for upload URL + key
-        const videoPresignRes = await fetch(`${apiUrl}/api/upload/presign`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: `highlight_${file.filename}.webm`,
-            contentType: videoContentType,
-            type: "highlightVideo",
-          }),
+        const videoPresignData = await presignUpload(apiUrl, {
+          filename: `highlight_${file.filename}.webm`,
+          contentType: videoContentType,
+          type: "highlightVideo",
         });
-
-        const videoPresignData = await videoPresignRes.json();
+        if (isStale()) return;
         if (!videoPresignData?.uploadUrl || !videoPresignData?.key) {
           throw new Error("Failed to get upload URL for trimmed video");
         }
@@ -557,6 +557,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
           headers: { "Content-Type": videoContentType },
           body: trimmedBlob,
         });
+        if (isStale()) return;
         // 4) store new key and new trim times
         highlightFileId = videoPresignData.key;
         nextTrimStart = trimStart;
@@ -570,17 +571,12 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         // convert dataURL -> blob so we can upload it
         const blob = dataUrlToBlob(currentThumbnail);
         // ask backend for upload url + key
-        const presignRes = await fetch(`${apiUrl}/api/upload/presign`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: `highlight_${file.filename}.jpg`,
-            contentType: "image/jpeg",
-            type: "highlightThumbnail",
-          }),
+        const presignData = await presignUpload(apiUrl, {
+          filename: `highlight_${file.filename}.jpg`,
+          contentType: "image/jpeg",
+          type: "highlightThumbnail",
         });
-
-        const presignData = await presignRes.json();
+        if (isStale()) return;
         if (!presignData.uploadUrl || !presignData.key) {
           throw new Error("Failed to get upload URL for thumbnail");
         }
@@ -590,6 +586,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
           headers: { "Content-Type": "image/jpeg" },
           body: blob,
         });
+        if (isStale()) return;
         // store new key
         highlightThumbnailId = presignData.key;
       }
@@ -598,32 +595,24 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         throw new Error("Highlight video was not created. Please try again.");
       }
       //Tell backend: "this file now has highlight assets"
-      const saveRes = await fetch(`${apiUrl}/api/upload/highlight`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sourceFileId: file.fileId,
-          highlightFileId,
-          highlightThumbnailId,
-          trimStartSec: nextTrimStart,
-          trimEndSec: nextTrimEnd,
-          filename: file.filename,
-          // include the rest of metadata so server can keep row consistent
-          species: file.species,
-          species_source: file.species_source,
-          domesticated_common_name: file.domesticated_common_name,
-          plot: file.plot,
-          experiencePoint: file.experiencePoint,
-          sensorId: file.sensorId,
-          deploymentId: file.deploymentId,
-          id_state: file.id_state ?? "Unknown",
-        }),
+      await saveHighlight(apiUrl, {
+        sourceFileId: file.fileId,
+        highlightFileId,
+        highlightThumbnailId,
+        trimStartSec: nextTrimStart,
+        trimEndSec: nextTrimEnd,
+        filename: file.filename,
+        // include the rest of metadata so server can keep row consistent
+        species: file.species,
+        species_source: file.species_source,
+        domesticated_common_name: file.domesticated_common_name,
+        plot: file.plot,
+        experiencePoint: file.experiencePoint,
+        sensorId: file.sensorId,
+        deploymentId: file.deploymentId,
+        id_state: file.id_state ?? "Unknown",
       });
-
-      const saveResult = await saveRes.json();
-      if (!saveRes.ok || !saveResult?.success) {
-        throw new Error(saveResult?.error || "Failed to save highlight asset");
-      }
+      if (isStale()) return;
 
       onSaved({
         highlight: true,
@@ -642,14 +631,18 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       });
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save highlight settings");
-      notify({
-        title: "Highlight save failed",
-        message: err instanceof Error ? err.message : "Failed to save highlight settings.",
-        tone: "error",
-      });
+      if (!isStale()) {
+        setError(err instanceof Error ? err.message : "Failed to save highlight settings");
+        notify({
+          title: "Highlight save failed",
+          message: err instanceof Error ? err.message : "Failed to save highlight settings.",
+          tone: "error",
+        });
+      }
     } finally {
-      setSaving(false);
+      if (!isStale()) {
+        setSaving(false);
+      }
     }
   };
 
@@ -666,20 +659,12 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     setError(null);
 
     try {
-      const res = await fetch(`${apiUrl}/api/upload/metadata/update`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: file.fileId,
-          stage: "id",
-          highlight: false,
-          displayState: "Showcase",
-        }),
+      await updateMetadata(apiUrl, {
+        fileId: file.fileId,
+        stage: "id",
+        highlight: false,
+        displayState: "Showcase",
       });
-      const result = await res.json();
-      if (!res.ok || !result?.success) {
-        throw new Error(result?.error || "Failed to revert to ID");
-      }
 
       onSaved({
         stage: "id",
@@ -705,32 +690,31 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     }
   };
 
-  const handleDeleteHighlight = async () => {
+  const removeHighlightAndMoveToDone = async (options: {
+    title: string;
+    message: string;
+    confirmLabel: string;
+    successTitle: string;
+    successMessage: string;
+    setBusy: (value: boolean) => void;
+  }) => {
     const confirmed = await requestConfirm({
-      title: "Delete highlight?",
-      message: "This will delete the highlight video/thumbnail and move the item back to Done.",
-      confirmLabel: "Delete highlight",
+      title: options.title,
+      message: options.message,
+      confirmLabel: options.confirmLabel,
       tone: "danger",
     });
     if (!confirmed) return;
 
-    setDeleting(true);
+    options.setBusy(true);
     setError(null);
 
     try {
-      const res = await fetch(`${apiUrl}/api/upload/highlight/delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: file.fileId,
-          highlightFileId: file.highlightFileId,
-          highlightThumbnailId: file.highlightThumbnailId,
-        }),
+      await deleteHighlight(apiUrl, {
+        fileId: file.fileId,
+        highlightFileId: file.highlightFileId,
+        highlightThumbnailId: file.highlightThumbnailId,
       });
-      const result = await res.json();
-      if (!res.ok || !result?.success) {
-        throw new Error(result?.error || "Failed to delete highlight assets");
-      }
 
       onSaved({
         highlight: false,
@@ -742,7 +726,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         highlightThumbnailId: undefined,
         updatedAt: new Date().toISOString(),
       });
-      notify({ title: "Item removed", message: "Item was successfully deleted.", tone: "info" });
+      notify({ title: options.successTitle, message: options.successMessage, tone: "info" });
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to delete highlight");
@@ -752,7 +736,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
         tone: "error",
       });
     } finally {
-      setDeleting(false);
+      options.setBusy(false);
     }
   };
   // If highlight exists already: show options first.
@@ -760,63 +744,59 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
     if (hasExistingHighlightAssets) {
       setReplaceVideo(true);
       setReplaceThumbnail(true);
-      setShowReplacePrompt(true);
+      replacePrompt.open();
       return;
     }
     performSave({ replaceVideo: true, replaceThumbnail: Boolean(framePreview) });
   };
 
-  const handleRevertToDone = async () => {
-    if (!file.fileId) return;
+  const handleDeleteOriginal = async () => {
     const confirmed = await requestConfirm({
-      title: "Revert to Done?",
-      message: "This will delete the highlight video and thumbnail and move the item back to Done.",
-      confirmLabel: "Yes, revert",
+      title: "Delete file?",
+      message: "This will permanently remove the video from S3 and delete its metadata.",
+      confirmLabel: "Delete",
       tone: "danger",
     });
     if (!confirmed) return;
 
-    setReverting(true);
+    setDeleting(true);
     setError(null);
 
     try {
-      const res = await fetch(`${apiUrl}/api/upload/highlight/delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: file.fileId,
-          highlightFileId: file.highlightFileId,
-          highlightThumbnailId: file.highlightThumbnailId,
-        }),
+      await deleteFile(file.fileId);
+      onDeleted(file.fileId);
+      notify({
+        title: "Item removed",
+        message: "Item was successfully deleted.",
+        tone: "info",
       });
-
-      const result = await res.json();
-      if (!res.ok || !result?.success) {
-        throw new Error(result?.error || "Failed to revert highlight");
-      }
-
-      onSaved({
-        highlight: false,
-        displayState: "Showcase",
-        stage: "done",
-        trimStartSec: undefined,
-        trimEndSec: undefined,
-        highlightFileId: undefined,
-        highlightThumbnailId: undefined,
-        updatedAt: new Date().toISOString(),
-      });
-      notify({ title: "Reverted to Done", message: "Highlight removed and item moved to Done.", tone: "info" });
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to revert highlight");
+      setError(err instanceof Error ? err.message : "Failed to delete file");
       notify({
-        title: "Revert failed",
-        message: err instanceof Error ? err.message : "Failed to revert highlight.",
+        title: "Delete failed",
+        message: err instanceof Error ? err.message : "Failed to delete file.",
         tone: "error",
       });
     } finally {
-      setReverting(false);
+      setDeleting(false);
     }
+  };
+
+  const handleRevertToDone = async () => {
+    if (!file.fileId) return;
+    await removeHighlightAndMoveToDone({
+      title: "Revert to Done?",
+      message: "This will delete the highlight video and thumbnail and move the item back to Done.",
+      confirmLabel: "Yes, revert",
+      successTitle: "Reverted to Done",
+      successMessage: "Highlight removed and item moved to Done.",
+      setBusy: setReverting,
+    });
+  };
+
+  const handleDeleteHighlight = async () => {
+    await handleDeleteOriginal();
   };
 
   return (
@@ -824,7 +804,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
       <div className="relative w-full max-w-5xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-3.5 md:p-4 lg:p-5 2xl:p-6 space-y-4 sm:space-y-5 max-h-[92vh] overflow-y-auto custom-scroll">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <h2 className="text-sm sm:text-base lg:text-base 2xl:text-lg font-semibold text-white wrap-break-wordword mb-0.5">
+            <h2 className="text-sm sm:text-base lg:text-base 2xl:text-lg font-semibold text-white wrap-break-word mb-0.5">
               Highlight editor
             </h2>
             <p className="text-slate-300 text-[10px] sm:text-xs 2xl:text-sm wrap-break-word">
@@ -836,7 +816,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
               <button
                 onClick={handleRevertToId}
                 disabled={revertingToId}
-                className="px-3 py-1.25 rounded-md border border-amber-500 text-amber-100 font-semibold hover:bg-amber-500/10 transition text-[11px] sm:text-xs disabled:opacity-60"
+                className="px-3 py-1.5 rounded-md border border-amber-500 text-amber-100 font-semibold hover:bg-amber-500/10 transition text-[11px] sm:text-xs disabled:opacity-60"
               >
                 {revertingToId ? "Reverting..." : "Revert to ID"}
               </button>
@@ -845,7 +825,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
               <button
                 onClick={handleDeleteHighlight}
                 disabled={deleting}
-                className="px-3 py-1.25 rounded-md border border-red-600 text-red-200 font-semibold hover:bg-red-600/10 transition text-[11px] sm:text-xs disabled:opacity-60"
+                className="px-3 py-1.5 rounded-md border border-red-600 text-red-200 font-semibold hover:bg-red-600/10 transition text-[11px] sm:text-xs disabled:opacity-60"
               >
                 {deleting ? "Deleting..." : "Delete"}
               </button>
@@ -854,7 +834,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
               <button
                 onClick={handleRevertToDone}
                 disabled={reverting}
-                className="px-3 py-1.25 rounded-md border border-red-600 text-red-200 font-semibold hover:bg-red-600/10 transition text-[11px] sm:text-xs disabled:opacity-60"
+                className="px-3 py-1.5 rounded-md border border-red-600 text-red-200 font-semibold hover:bg-red-600/10 transition text-[11px] sm:text-xs disabled:opacity-60"
               >
                 {reverting ? "Reverting..." : "Revert to Done"}
               </button>
@@ -862,13 +842,13 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
             <button
               onClick={handleSaveClick}
               disabled={saving}
-              className="px-3 py-1.25 rounded-md border border-lime-500 text-lime-100 font-semibold hover:bg-lime-400/10 transition text-[11px] sm:text-xs disabled:opacity-60"
+              className="px-3 py-1.5 rounded-md border border-lime-500 text-lime-100 font-semibold hover:bg-lime-400/10 transition text-[11px] sm:text-xs disabled:opacity-60"
             >
               {saving ? "Saving..." : "Save highlight"}
             </button>
             <button
               onClick={onClose}
-              className="px-3 py-1.25 text-[11px] sm:text-xs 2xl:px-3.5 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
+              className="px-3 py-1.5 text-[11px] sm:text-xs 2xl:px-3.5 rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
             >
               Close
             </button>
@@ -938,7 +918,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
                 <div className="inline-flex items-center justify-center gap-2 px-1 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-100 text-[11px] sm:text-xs self-center max-w-62">
                   <span className="font-semibold">Existing highlight detected</span>
                   <button
-                    onClick={() => setShowReplacePrompt(true)}
+                    onClick={replacePrompt.open}
                     className="text-amber-900 bg-amber-200 hover:bg-amber-300 px-2 py-1 rounded-md font-semibold text-[11px]"
                   >
                     Options
@@ -953,7 +933,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
                     <img
                       src={framePreview}
                       alt="Thumbnail preview"
-                      className="h-24 w-46full object-cover rounded border border-slate-700"
+                      className="h-24 w-full object-cover rounded border border-slate-700"
                     />
                   ) : (
                     <div className="w-46 h-24 rounded border border-dashed border-slate-700 bg-neutral-900" />
@@ -978,7 +958,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
               <div className="flex items-center justify-center gap-2.5 flex-nowrap">
                 <button
                   onClick={togglePlay}
-                  className="px-3.5 py-1.75 text-[12px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center justify-center gap-2 min-w-30"
+                  className="px-3.5 py-1.5 text-[12px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center justify-center gap-2 min-w-30"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                     {isPlaying ? (
@@ -995,7 +975,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
                 </button>
                 <button
                   onClick={toggleFullscreen}
-                  className="px-3.5 py-1.75 text-[12px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center justify-center gap-2 min-w-30"
+                  className="px-3.5 py-1.5 text-[12px] sm:text-sm font-semibold rounded-md bg-slate-800 text-slate-100 border border-slate-700 hover:border-slate-500 flex items-center justify-center gap-2 min-w-30"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M3 3h5v2H5v3H3V3zm9 0h5v5h-2V5h-3V3zm3 9h2v5h-5v-2h3v-3zm-7 3v2H3v-5h2v3h3z" />
@@ -1029,13 +1009,13 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
           </div>
         </div>
 
-        {showReplacePrompt && (
+        {replacePrompt.value && (
           <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
             <div className="bg-neutral-900 border border-slate-800 rounded-xl w-full max-w-lg shadow-2xl p-4 sm:p-5 2xl:p-6 space-y-4 max-h-[90vh] overflow-y-auto custom-scroll">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm sm:text-base 2xl:text-lg font-semibold text-white">Replace existing highlight?</h3>
                 <button
-                  onClick={() => setShowReplacePrompt(false)}
+                  onClick={replacePrompt.close}
                   className="px-2.5 py-1 text-sm rounded-md border border-slate-700 text-slate-200 hover:border-slate-500 transition"
                 >
                   ✕
@@ -1075,7 +1055,7 @@ export function HighlightEditorModal({ file, apiUrl, onClose, onSaved, requestCo
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => {
-                    setShowReplacePrompt(false);
+                    replacePrompt.close();
                     performSave({ replaceVideo, replaceThumbnail });
                   }}
                   disabled={

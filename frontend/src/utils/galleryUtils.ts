@@ -3,8 +3,16 @@ import type { MetadataItem } from "../types/gallery";
 export type Status = "draft" | "id" | "done" | "display";
 export type ViewFilter = Status;
 export type IdState = "Unknown" | "Genus" | "AI ID" | "Guess" | "Confirmed";
+export type RequiredMetadataField = "species" | "plot" | "experiencePoint" | "sensorId" | "deploymentId";
 
 const REQUIRED_FIELDS: Array<keyof MetadataItem> = ["plot", "experiencePoint", "sensorId", "deploymentId"];
+export const REQUIRED_METADATA_FIELDS: RequiredMetadataField[] = [
+  "species",
+  "plot",
+  "experiencePoint",
+  "sensorId",
+  "deploymentId",
+];
 
 // Check if all required fields are filled in
 export function isComplete(item: MetadataItem) {
@@ -25,6 +33,56 @@ export function normalizeIdState(value?: string | null): IdState {
   }
   return "Unknown";
 }
+
+export function isIdStateConfirmed(value?: string | null) {
+  return value === "Confirmed";
+}
+
+export function getMissingMetadataFields(values: Partial<Record<RequiredMetadataField, string | undefined>>) {
+  return REQUIRED_METADATA_FIELDS.filter((key) => {
+    const value = values[key];
+    return !value || value.trim() === "";
+  });
+}
+
+export function isConfirmedMetadataReady(values: Partial<Record<RequiredMetadataField, string | undefined>> & { id_state?: string | null }) {
+  const missing = getMissingMetadataFields(values);
+  const idStateConfirmed = isIdStateConfirmed(values.id_state);
+  return {
+    ok: missing.length === 0 && idStateConfirmed,
+    missing,
+    idStateConfirmed,
+  };
+}
+
+export function validateStageTransition(options: {
+  currentStatus: Status;
+  nextStatus: Status;
+  speciesVerified: boolean;
+  idState?: string | null;
+  values: Partial<Record<RequiredMetadataField, string | undefined>>;
+}) {
+  const { currentStatus, nextStatus, speciesVerified, idState, values } = options;
+  if (nextStatus !== "done" && nextStatus !== "display") {
+    return {
+      ok: true,
+      missing: [] as RequiredMetadataField[],
+      needsSpecies: false,
+      idStateConfirmed: true,
+    };
+  }
+
+  const missing = getMissingMetadataFields(values);
+  const idStateConfirmed = isIdStateConfirmed(idState);
+  const needsSpecies = !speciesVerified && currentStatus !== "done" && currentStatus !== "display";
+
+  return {
+    ok: missing.length === 0 && idStateConfirmed && !needsSpecies,
+    missing,
+    needsSpecies,
+    idStateConfirmed,
+  };
+}
 // Fallback if normalizeStage returns null.
 export function deriveStatus(item: MetadataItem): Status {
    // If marked as highlight → show in display
@@ -34,18 +92,4 @@ export function deriveStatus(item: MetadataItem): Status {
   if (item.id_state === "Confirmed" && item.species) return "done";
   if (isComplete(item)) return "id";
   return "draft";
-}
-
-export function extractCameraName(key?: string): string | null {
-  // Parse the camera id from the last underscore in the filename.
-  if (!key) return null;
-   // Get only the filename (remove folders)
-  const base = key.split("/").pop() ?? key;
-  const underscoreIndex = base.lastIndexOf("_");
-  if (underscoreIndex === -1) return null;
-  const tail = base.slice(underscoreIndex + 1);
-  // Remove file extension (.jpg, .png, etc.)
-  const withoutExt = tail.replace(/\.[^.]+$/, "");
-  const trimmed = withoutExt.trim();
-  return trimmed ? trimmed : null;
 }

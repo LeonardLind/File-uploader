@@ -55,7 +55,7 @@ export function LoginPage() {
             <img
               src={menuIcon}
               alt="Menu"
-              className="h-8 w-17 opacity-80 hover:opacity-100 transition cursor-pointer"
+              className="h-8 w-8 opacity-80 hover:opacity-100 transition cursor-pointer"
             />
           </div>
         </div>

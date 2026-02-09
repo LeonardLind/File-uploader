@@ -10,10 +10,13 @@ import { useMetadata } from "../hooks/useMetadata";
 import { useFilteredMetadata } from "../hooks/useFilteredMetadata";
 import { useConfirmDialog } from "../hooks/useConfirmDialog";
 import { useKeyboardNavigation } from "../hooks/useKeyboardNavigation";
-import { deriveStatus, type Status } from "../utils/galleryUtils";
+import { deriveStatus, normalizeIdState, validateStageTransition, type IdState, type Status } from "../utils/galleryUtils";
 import type { MetadataItem } from "../types/gallery";
 import { useToast } from "../components/ToastProvider";
-import { fetchSignedUrl } from "../utils/signedUrl";
+import { fetchSignedUrl } from "../api/uploadApi";
+import { useDeleteFile } from "../hooks/useDeleteFile";
+import { checkHighlightExists, updateMetadata } from "../api/uploadApi";
+import { useToggle } from "../hooks/useToggle";
 
 const statusStyles: Record<Status, { bg: string; text: string; label: string }> = {
   draft: { bg: "bg-slate-700", text: "text-white", label: "Draft" },
@@ -29,8 +32,8 @@ export function GalleryPage() {
   const [editing, setEditing] = useState<MetadataItem | null>(null);
   const [savingMetadata, setSavingMetadata] = useState(false);
   // UI: open/close filter panels
-  const [showSidebarFilters, setShowSidebarFilters] = useState(false);
-  const [mainFiltersOpen, setMainFiltersOpen] = useState(false);
+  const sidebarFilters = useToggle(false);
+  const mainFilters = useToggle(false);
   const [highlightAvailability, setHighlightAvailability] = useState<
     Record<string, { highlightFileId?: string; exists: boolean }>
   >({});
@@ -58,6 +61,7 @@ export function GalleryPage() {
   const { filtered, view } = useFilteredMetadata(files, filters, location.search);
   useKeyboardNavigation(editing, filtered, setEditing);
   const { notify } = useToast();
+  const { deleteFile } = useDeleteFile(API_URL);
   // Used to measure table height (for auto rows per page)
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   // In draft and id view we use a “sidebar + editor” layout
@@ -85,7 +89,7 @@ export function GalleryPage() {
   useEffect(() => {
     setEditing(null);
     setHighlightEditor(null);
-    setShowSidebarFilters(false);
+    sidebarFilters.close();
   }, [view]);
 
   const handleFilterChange = (key: keyof typeof filters, value: string) =>
@@ -113,21 +117,12 @@ export function GalleryPage() {
       title: "Delete file?",
       message: "This will permanently remove the video from S3 and delete its metadata.",
       confirmLabel: "Delete",
-      cancelLabel: "Cancel",
       tone: "danger",
     });
     if (!confirmed) return;
 
     try {
-      const res = await fetch(`${API_URL}/api/upload/delete`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileId }),
-      });
-      const result = await res.json();
-      if (!res.ok || !result?.success) {
-        throw new Error(result?.error || "Delete failed");
-      }
+      await deleteFile(fileId);
       // Remove from local list
       setFiles((prev) => prev.filter((f) => f.fileId !== fileId));
       setEditing((prev) => (prev?.fileId === fileId ? null : prev));
@@ -159,14 +154,7 @@ export function GalleryPage() {
   const toggleActive = async (file: MetadataItem, active: boolean) => {
     try {
       const displayState = active ? "Active" : "Inactive";
-      await fetch(`${API_URL}/api/upload/metadata/update`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: file.fileId,
-          displayState,
-        }),
-      });
+      await updateMetadata(API_URL, { fileId: file.fileId, displayState });
       updateLocal(file.fileId, { displayState });
     } catch (err: unknown) {
       requestAlert({
@@ -185,80 +173,71 @@ export function GalleryPage() {
     sensorId?: string;
     deploymentId?: string;
     status: Status;
-    id_state: string;
+    id_state: IdState;
     displayState?: string;
     highlight?: boolean;
   }) => {
     if (!editing) return;
     // Remember old stage so we can show the right toast
     const previousStage = deriveStatus(editing);
-    // If user tries to move to DONE, require all fields + Confirmed
-    if (payload.status === "done") {
-      const requiredFilled = [
-        payload.species,
-        payload.plot,
-        payload.experiencePoint,
-        payload.sensorId,
-        payload.deploymentId,
-      ].every((val) => (val ?? "").trim() !== "");
-      if (!requiredFilled || payload.id_state !== "Confirmed") {
+    const nextSpecies = payload.species ?? editing.species ?? "";
+    const speciesSourceCandidate =
+      payload.species_source ??
+      (payload.species && payload.species !== editing.species ? undefined : editing.species_source);
+    const nextValues = {
+      species: nextSpecies,
+      plot: payload.plot ?? editing.plot ?? "",
+      experiencePoint: payload.experiencePoint ?? editing.experiencePoint ?? "",
+      sensorId: payload.sensorId ?? editing.sensorId ?? "",
+      deploymentId: payload.deploymentId ?? editing.deploymentId ?? "",
+    };
+    const nextIdState = normalizeIdState(payload.id_state ?? editing.id_state ?? "Unknown");
+    const speciesVerified = speciesSourceCandidate === "iucn" || speciesSourceCandidate === "domesticated";
+
+    const stageValidation = validateStageTransition({
+      currentStatus: deriveStatus(editing),
+      nextStatus: payload.status,
+      speciesVerified,
+      idState: nextIdState,
+      values: nextValues,
+    });
+
+    if (payload.status === "done" && !stageValidation.ok) {
         await requestAlert({
           title: "Done requires confirmed metadata",
           message: "All fields must be filled and ID State must be Confirmed before moving to Done.",
         });
         return;
-      }
     }
     // If user tries to move to DISPLAY, require all fields + Confirmed
-    if (payload.status === "display") {
-      const requiredFilled = [
-        payload.species,
-        payload.plot,
-        payload.experiencePoint,
-        payload.sensorId,
-        payload.deploymentId,
-      ].every((val) => (val ?? "").trim() !== "");
-      if (!requiredFilled || payload.id_state !== "Confirmed") {
+    if (payload.status === "display" && !stageValidation.ok) {
         await requestAlert({
           title: "Display requires confirmed metadata",
           message: "All fields must be filled and ID State must be Confirmed before setting status to Display.",
         });
         return;
-      }
     }
      // If status is DISPLAY, we consider it a highlight item
     const nextHighlight = payload.status === "display";
-    const nextDisplay =
-      payload.displayState ||
-      (nextHighlight ? "Active" : payload.status === "done" ? "Showcase" : "Showcase");
-    const sendHighlight =
-      payload.highlight !== undefined ? payload.highlight : nextHighlight ? true : undefined;
+    const nextDisplay = payload.displayState || (nextHighlight ? "Active" : "Showcase");
+    const sendHighlight = nextHighlight;
 
     try {
       setSavingMetadata(true);
-      const res = await fetch(`${API_URL}/api/upload/metadata/update`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileId: editing.fileId,
-          species: payload.species,
-          species_source: payload.species_source,
-          domesticated_common_name: payload.domesticated_common_name,
-          plot: payload.plot,
-          experiencePoint: payload.experiencePoint,
-          sensorId: payload.sensorId,
-          deploymentId: payload.deploymentId,
-          id_state: payload.id_state,
-          highlight: sendHighlight,
-          displayState: nextDisplay,
-          stage: payload.status,
-        }),
+      await updateMetadata(API_URL, {
+        fileId: editing.fileId,
+        species: payload.species,
+        species_source: payload.species_source,
+        domesticated_common_name: payload.domesticated_common_name,
+        plot: payload.plot,
+        experiencePoint: payload.experiencePoint,
+        sensorId: payload.sensorId,
+        deploymentId: payload.deploymentId,
+        id_state: nextIdState,
+        highlight: sendHighlight,
+        displayState: nextDisplay,
+        stage: payload.status,
       });
-
-      const result = await res.json();
-      if (!result?.success) {
-        throw new Error(result?.error || "Metadata update failed");
-      }
 
       const displayState = payload.displayState || nextDisplay;
       updateLocal(editing.fileId, {
@@ -266,10 +245,11 @@ export function GalleryPage() {
         highlight: sendHighlight ?? editing.highlight,
         displayState,
         stage: payload.status,
+        id_state: nextIdState,
         updatedAt: new Date().toISOString(),
       });
       setEditing((prev) =>
-        prev ? { ...prev, ...payload, highlight: sendHighlight ?? prev.highlight, displayState } : null
+        prev ? { ...prev, ...payload, highlight: sendHighlight ?? prev.highlight, displayState, id_state: nextIdState } : null
       );
 
       if (payload.status !== previousStage) {
@@ -327,7 +307,7 @@ export function GalleryPage() {
       const container = tableContainerRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const filterOpen = mainFiltersOpen && !useSidebarLayout;
+      const filterOpen = mainFilters.value && !useSidebarLayout;
       const bottomBuffer = view === "display"
         ? (filterOpen ? 160 : 36)
         : (filterOpen ? 120 : 56);
@@ -347,7 +327,7 @@ export function GalleryPage() {
     const handleResize = () => window.requestAnimationFrame(measure);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [useSidebarLayout, computedItemsPerPage, view, filtered.length, mainFiltersOpen]);
+  }, [useSidebarLayout, computedItemsPerPage, view, filtered.length, mainFilters.value]);
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) setCurrentPage(page);
@@ -376,16 +356,11 @@ export function GalleryPage() {
       await Promise.all(
         filesToCheck.map(async (item) => {
           try {
-            const res = await fetch(`${API_URL}/api/upload/highlight/exists`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ fileId: item.fileId, highlightFileId: item.highlightFileId }),
-              signal: controller.signal,
-            });
-            const data = await res.json();
-            if (!res.ok || !data?.success) {
-              throw new Error(data?.error || "Highlight check failed");
-            }
+            const data = await checkHighlightExists(
+              API_URL,
+              { fileId: item.fileId, highlightFileId: item.highlightFileId },
+              controller.signal
+            );
             updates[item.fileId] = { highlightFileId: item.highlightFileId, exists: Boolean(data.exists) };
           } catch (err: unknown) {
             if (controller.signal.aborted) return;
@@ -435,13 +410,15 @@ export function GalleryPage() {
       await Promise.all(
         targets.map(async ({ key, type, cacheKey }) => {
           try {
-            const url = await fetchSignedUrl({
-              apiUrl: API_URL,
+            const data = await fetchSignedUrl(API_URL, {
               key,
               type,
               signal: controller.signal,
             });
-            updates[cacheKey] = url;
+            if (!data?.url) {
+              throw new Error("Missing signed URL");
+            }
+            updates[cacheKey] = data.url;
           } catch (err) {
             if (!controller.signal.aborted) {
               console.warn("Failed to load signed thumbnail URL", err);
@@ -479,7 +456,7 @@ export function GalleryPage() {
             </div>
             {files.length > 0 && !editing && (
               <button
-                onClick={() => setMainFiltersOpen((prev) => !prev)}
+                onClick={mainFilters.toggle}
                 className="self-start inline-flex items-center gap-2 rounded-md border border-slate-700 bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-lime-400 transition"
                 title="Toggle filters"
               >
@@ -495,13 +472,13 @@ export function GalleryPage() {
                 >
                   <path d="M4 5h16M6 12h12M9 19h6" />
                 </svg>
-                <span>{mainFiltersOpen ? "Hide filters" : "Show filters"}</span>
+                <span>{mainFilters.value ? "Hide filters" : "Show filters"}</span>
               </button>
             )}
           </div>
 
           {files.length > 0 && !editing && (
-            <div className={`filter-panel ${mainFiltersOpen ? "filter-open" : ""}`}>
+            <div className={`filter-panel ${mainFilters.value ? "filter-open" : ""}`}>
               <div className="filter-panel-inner">
                 <GalleryFilterBar
                   filters={filters}
@@ -522,13 +499,13 @@ export function GalleryPage() {
                 <div className="px-4 py-3 border-b border-slate-800 text-slate-200 font-semibold text-sm flex items-center justify-between gap-3">
                   <span>Files</span>
                   <button
-                    onClick={() => setShowSidebarFilters((prev) => !prev)}
+                    onClick={sidebarFilters.toggle}
                     className="text-[11px] px-3 py-1.5 rounded-md border border-slate-700 text-slate-200 hover:border-lime-400 transition"
                   >
                     Filters
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto custom-scroll flex flex-col gap-2.5 px-2 py-4.5 ">
+                <div className="flex-1 overflow-y-auto custom-scroll flex flex-col gap-2.5 px-2 py-4">
                   {paginatedItems.map((item) => {
                     const active = editing?.fileId === item.fileId;
                     return (
@@ -742,6 +719,11 @@ export function GalleryPage() {
           requestConfirm={requestConfirm}
           onClose={() => setHighlightEditor(null)}
           onSaved={(updates) => updateLocal(highlightEditor.fileId, updates)}
+          onDeleted={(fileId) => {
+            setFiles((prev) => prev.filter((f) => f.fileId !== fileId));
+            setEditing((prev) => (prev?.fileId === fileId ? null : prev));
+            setHighlightEditor((prev) => (prev?.fileId === fileId ? null : prev));
+          }}
         />
       )}
 
@@ -767,7 +749,7 @@ export function GalleryPage() {
         }}
       />
 
-      {showSidebarFilters && (
+      {sidebarFilters.value && (
         <div className="fixed inset-0 z-75 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
           <div className="w-full max-w-4xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-4 sm:p-5">
             <div className="flex items-center justify-between mb-4">
@@ -780,7 +762,7 @@ export function GalleryPage() {
                   Clear
                 </button>
                 <button
-                  onClick={() => setShowSidebarFilters(false)}
+                  onClick={sidebarFilters.close}
                   className="text-[11px] sm:text-xs px-3 py-1.5 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition"
                 >
                   Close

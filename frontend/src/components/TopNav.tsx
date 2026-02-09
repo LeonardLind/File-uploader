@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import greenCubesLogo from "../assets/greenCubesLogo.png";
+import { fetchConfirmedSummary } from "../api/uploadApi";
+import { useToggle } from "../hooks/useToggle";
 
 type ConfirmedSpeciesSummary = {
   species: string;
@@ -13,10 +15,18 @@ type ConfirmedSpeciesSummary = {
   assessment_url?: string | null;
 };
 
+const isConfirmedSpeciesSummary = (value: unknown): value is ConfirmedSpeciesSummary =>
+  Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as ConfirmedSpeciesSummary).species === "string" &&
+      typeof (value as ConfirmedSpeciesSummary).count === "number"
+  );
+
 export function TopNav() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [summaryOpen, setSummaryOpen] = useState(false);
+  const summaryModal = useToggle(false);
   const [summaryItems, setSummaryItems] = useState<ConfirmedSpeciesSummary[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -50,12 +60,9 @@ export function TopNav() {
     try {
       setSummaryLoading(true);
       setSummaryError(null);
-      const res = await fetch(`${API_URL}/api/upload/confirmed-summary`);
-      const data = await res.json();
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to load summary");
-      }
-      setSummaryItems(data.items || []);
+      const data = await fetchConfirmedSummary(API_URL);
+      const items = Array.isArray(data.items) ? data.items.filter(isConfirmedSpeciesSummary) : [];
+      setSummaryItems(items);
     } catch (err: unknown) {
       setSummaryError(err instanceof Error ? err.message : "Failed to load summary");
     } finally {
@@ -64,9 +71,9 @@ export function TopNav() {
   };
 
   useEffect(() => {
-    if (!summaryOpen) return;
+    if (!summaryModal.value) return;
     loadSummary();
-  }, [summaryOpen]);
+  }, [summaryModal.value]);
 
   // Map IUCN status code to badge styling.
   const statusTone = (code?: string | null) => {
@@ -122,10 +129,10 @@ export function TopNav() {
           </nav>
 
           <div className="flex items-center gap-3 sm:gap-4 text-slate-300">
-            <button
-              onClick={() => setSummaryOpen(true)}
+              <button
+              onClick={summaryModal.open}
               className={`group flex items-center gap-2 bg-neutral-800 border rounded-md px-2.5 py-1.5 transition text-sm ${
-                summaryOpen ? "border-lime-400" : "border-slate-700 hover:border-lime-400"
+                summaryModal.value ? "border-lime-400" : "border-slate-700 hover:border-lime-400"
               }`}
             >
               <svg
@@ -137,7 +144,7 @@ export function TopNav() {
                 strokeLinejoin="round"
                 aria-hidden="true"
                 className={`h-5 w-5 transition-colors ${
-                  summaryOpen ? "text-lime-400" : "text-slate-200 group-hover:text-lime-400"
+                  summaryModal.value ? "text-lime-400" : "text-slate-200 group-hover:text-lime-400"
                 }`}
               >
                 <path d="M4 6h16" />
@@ -183,7 +190,7 @@ export function TopNav() {
         </div>
       </header>
 
-      {summaryOpen && (
+      {summaryModal.value && (
         <div className="fixed inset-0 z-80 bg-black/70 backdrop-blur-sm flex items-center justify-center px-4">
           <div className="w-full max-w-5xl bg-neutral-950 border border-slate-800 rounded-2xl shadow-2xl p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -204,7 +211,7 @@ export function TopNav() {
                   Refresh
                 </button>
                 <button
-                  onClick={() => setSummaryOpen(false)}
+                  onClick={summaryModal.close}
                   className="text-[11px] sm:text-xs px-3 py-1.5 rounded-md bg-lime-400 text-black font-semibold hover:bg-lime-300 transition"
                 >
                   Close
